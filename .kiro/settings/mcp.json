@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "sewasetu-citizen": {
+      "type": "http",
+      "url": "http://localhost/mcp/citizen/mcp",
+      "disabled": false,
+      "description": "Sewa Setu Citizen MCP — apply and check Old Age Pension applications"
+    },
+    "sewasetu-officer": {
+      "type": "http",
+      "url": "http://localhost/mcp/officer/mcp",
+      "disabled": false,
+      "description": "Sewa Setu Officer MCP — review queue, get dossier, approve/reject"
+    }
+  }
+}

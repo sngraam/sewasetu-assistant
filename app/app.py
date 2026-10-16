@@ -674,5 +674,113 @@ from oauth import oauth as _oauth_blueprint   # noqa: E402  (needs the definitio
 app.register_blueprint(_oauth_blueprint)
 
 
+# ---------------------------------------------------------------------------
+# Eval dashboard  (GET /eval-dashboard)
+# ---------------------------------------------------------------------------
+
+@app.route("/eval-dashboard")
+def eval_dashboard():
+    """Public page showing invented personas, their eval scenarios, and results."""
+    import sys as _sys
+    import os as _os
+    _app_dir = _os.path.dirname(_os.path.abspath(__file__))
+    if _app_dir not in _sys.path:
+        _sys.path.insert(0, _app_dir)
+
+    try:
+        from eval_personas import PERSONAS
+    except ImportError:
+        PERSONAS = []
+
+    # ── Live DB pass/fail checks ──────────────────────────────────────────────
+    updated_personas = []
+    for p in PERSONAS:
+        persona = dict(p)
+        mobile = persona.get("mobile")
+        if mobile and persona.get("role") == "citizen":
+            try:
+                conn = get_db()
+                cur = conn.cursor()
+                pre_status = persona.get("pre_seed_status")
+                if pre_status == "PENDING":
+                    # P03: application must still be PENDING, not withdrawn/changed
+                    cur.execute(
+                        "SELECT status FROM applications WHERE mobile=%s AND status='PENDING' LIMIT 1",
+                        (mobile,)
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        persona["result"] = "PASS"
+                        persona["notes"] = "PENDING application confirmed in DB."
+                    else:
+                        persona["result"] = "PENDING"
+                        persona["notes"] = "No PENDING application found — not yet tested."
+                elif persona.get("eligibility") == "INELIGIBLE":
+                    # P05/P06: no application should exist
+                    cur.execute(
+                        "SELECT count(*) FROM applications WHERE mobile=%s", (mobile,)
+                    )
+                    count = cur.fetchone()[0]
+                    if count == 0:
+                        persona["result"] = "PASS"
+                        persona["notes"] = "No application created — ineligible citizen correctly blocked."
+                    else:
+                        persona["result"] = "PENDING"
+                        persona["notes"] = "Not yet tested."
+                elif persona.get("eligibility") == "ELIGIBLE":
+                    # P01/P02: new PENDING application should exist
+                    cur.execute(
+                        "SELECT application_no, status FROM applications "
+                        "WHERE mobile=%s AND status='PENDING' ORDER BY submitted_at DESC LIMIT 1",
+                        (mobile,)
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        persona["result"] = "PASS"
+                        persona["notes"] = f"Application {row[0]} ({row[1]}) found in DB."
+                    else:
+                        persona["result"] = "PENDING"
+                        persona["notes"] = "No PENDING application found — not yet tested."
+                cur.close()
+                conn.close()
+            except Exception as e:
+                persona["notes"] = f"DB check error: {e}"
+        updated_personas.append(persona)
+
+    PERSONAS = updated_personas
+
+    # Load e2e results JSON if present
+    e2e_results = []
+    results_path = _os.path.join(_app_dir, "..", "tests", "e2e_results.json")
+    try:
+        import json as _json
+        with open(results_path) as fh:
+            e2e_results = _json.load(fh)
+    except (FileNotFoundError, Exception):
+        pass
+
+    citizen_count = sum(1 for p in PERSONAS if p.get("role") == "citizen")
+    officer_count = sum(1 for p in PERSONAS if p.get("role") == "officer")
+    passed_count  = sum(1 for p in PERSONAS if p.get("result") == "PASS")
+    total_count   = len(PERSONAS)
+    pass_rate     = round(passed_count / total_count * 100) if total_count else 0
+
+    base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
+
+    return render_template(
+        "eval_dashboard.html",
+        personas=PERSONAS,
+        e2e_results=e2e_results,
+        citizen_count=citizen_count,
+        officer_count=officer_count,
+        passed_count=passed_count,
+        total_count=total_count,
+        pass_rate=pass_rate,
+        last_run="—",
+        citizen_mcp_url=base + "/mcp/citizen/mcp",
+        officer_mcp_url=base + "/mcp/officer/mcp",
+    )
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=False)

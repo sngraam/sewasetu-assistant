@@ -1,0 +1,80 @@
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env
+!mcp/.env.example
+
+# ── Secrets / credentials ─────────────────────────────────────────────────────
+.env.*
+!.env.example
+!mcp/.env.example
+*.pem
+*.key
+*.crt
+*.p12
+secrets.json
+credentials.json
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+# Keep docker-compose.yml in git. Ignore override files with local secrets.
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ── Database ──────────────────────────────────────────────────────────────────
+# Never commit live data dumps (only the initial seed is allowed)
+*.dump
+*.sql.gz
+pgdata/
+
+# ── Uploads / logs ────────────────────────────────────────────────────────────
+uploads/
+/var/sewasetu/
+*.log
+applogs/
+
+# ── Test artefacts ────────────────────────────────────────────────────────────
+tests/e2e_results.json
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Kiro IDE ──────────────────────────────────────────────────────────────────
+# Keep .kiro/settings/mcp.json (MCP server config) in git — it's not a secret.
+# Ignore session caches and generated state.
+.kiro/sessions/
+.kiro/cloud-cache/
+.kiro/sandbox-state/
+.kiro/web-session/
+
+# ── Caddy ─────────────────────────────────────────────────────────────────────
+caddy_data/
+caddy_config/
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+TEST
+*.mp3
+dist/
+build/
+*.egg-info/

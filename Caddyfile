@@ -1,0 +1,30 @@
+# Caddyfile — Sewa Setu Unified Gateway
+#
+# LOCAL DEV (http://localhost): served on port 80 over plain HTTP.
+# PRODUCTION: change http://{$PUBLIC_DOMAIN} to just {$PUBLIC_DOMAIN} so
+#   Caddy auto-provisions a TLS certificate via ACME/Let's Encrypt.
+#
+# Routes:
+#   /mcp/citizen/*  →  citizen_mcp:8001  (handle_path strips the prefix)
+#   /mcp/officer/*  →  officer_mcp:8002
+#   everything else →  app:8000 (Flask portal + OAuth + eval dashboard)
+
+http://{$PUBLIC_DOMAIN:localhost} {
+
+    # Citizen MCP — tools for applicants only
+    # External: /mcp/citizen/mcp  →  citizen_mcp:8001/mcp
+    handle_path /mcp/citizen* {
+        reverse_proxy citizen_mcp:8001
+    }
+
+    # Officer MCP — tools for block officers only
+    # External: /mcp/officer/mcp  →  officer_mcp:8002/mcp
+    handle_path /mcp/officer* {
+        reverse_proxy officer_mcp:8002
+    }
+
+    # Flask portal + OAuth 2.1 server + eval dashboard
+    handle {
+        reverse_proxy app:8000
+    }
+}

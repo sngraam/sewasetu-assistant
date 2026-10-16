@@ -1,0 +1,18 @@
+# Sewa Setu MCP servers — pinned production dependencies
+# mcp 2.x: MCPServer from mcp.server.mcpserver (FastMCP removed in 2.0)
+
+# MCP framework
+mcp[cli]>=2.3.0
+
+# JWT verification (RS256 + JWKS — already pulled in by mcp[cli] but pinned)
+PyJWT>=2.8.0
+cryptography>=42.0.0
+
+# Database (connection pool + queries)
+psycopg2-binary>=2.9.9
+
+# HTTP (SMS gateway + JWKS fetch)
+requests>=2.31.0
+
+# Environment variables
+python-dotenv>=1.0.0

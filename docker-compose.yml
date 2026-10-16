@@ -1,50 +1,191 @@
 services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────── #
   db:
     image: postgres:15
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: sewasetu
-      POSTGRES_USER: sewasetu
+      POSTGRES_DB:       sewasetu
+      POSTGRES_USER:     sewasetu
       POSTGRES_PASSWORD: sewasetu123
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./app/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - ./seed/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sewasetu"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
+  # ── SMS gateway (simulated telecom) ────────────────────────────────────── #
+  smsgw:
+    build: ./smsgw
+    restart: unless-stopped
+    expose:
+      - "8025"
+
+  # ── Flask portal + OAuth 2.1 authorization server ──────────────────────── #
   app:
     build: ./app
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-before-deploying}
-      # the address at which people reach this portal; stamped into sign-in tokens and
-      # discovery documents, so it must be the public one when deployed
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+      SECRET_KEY:       ${SECRET_KEY:-ssp-dev-key-change-me}
+      ADMIN_USERNAME:   ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD:   ${ADMIN_PASSWORD:-change-me-before-deploying}
+      PUBLIC_BASE_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}
     depends_on:
-      - db
-      - smsgw
+      db:
+        condition: service_healthy
+      smsgw:
+        condition: service_started
     volumes:
       - uploads:/var/sewasetu/uploads
       - applogs:/var/log/sewasetu
 
+  # ── Nightly deemed-approval cron ───────────────────────────────────────── #
   scheduler:
     build: ./app
-    # Run the deemed-approval job once at startup (so a freshly restored
-    # database is brought up to date), then hand over to cron for the nightly run.
+    restart: unless-stopped
     command: ["sh", "-c", "until python /app/scripts/deemed_approval.py; do sleep 5; done; exec cron -f"]
+    environment:
+      # Scheduler only needs the DB; no SECRET_KEY or PUBLIC_BASE_URL required.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-before-deploying}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
       - applogs:/var/log/sewasetu
 
-  smsgw:
-    build: ./smsgw
-    # internal only — reached by the app over the docker network and exposed to
-    # users via the app at /__gateway/ (so no second host port is needed)
-    expose:
-      - "8025"
+  # ── Citizen MCP (port 8001) ─────────────────────────────────────────────── #
+  citizen_mcp:
+    build: ./mcp
+    restart: unless-stopped
+    command: ["python", "citizen_mcp.py"]
+    ports:
+      - "8001:8001"
+    environment:
+      # ── Database (same instance as the portal) ──────────────────────────── #
+      DB_HOST:     db
+      DB_PORT:     "5432"
+      DB_NAME:     sewasetu
+      DB_USER:     sewasetu
+      DB_PASSWORD: sewasetu123
+
+      # ── SMS gateway (for OTP fallback / dev testing) ─────────────────────── #
+      SMS_GATEWAY_URL:      http://smsgw:8025
+      OTP_VALIDITY_SECONDS: "300"
+
+      # ── JWT / OAuth audience (MUST match the external URL the client uses) ─ #
+      # PORTAL_ISSUER     = canonical public URL of the portal   (= PUBLIC_BASE_URL)
+      # PORTAL_JWKS_URL   = internal URL to fetch JWKS from      (app container name)
+      # CITIZEN_MCP_URL   = canonical public URL of THIS server  (used as JWT audience)
+      # OFFICER_MCP_URL   = canonical public URL of officer MCP  (used for officer tokens)
+      PORTAL_ISSUER:    ${PUBLIC_BASE_URL:-http://localhost:8000}
+      PORTAL_JWKS_URL:  http://app:8000/.well-known/jwks.json
+      CITIZEN_MCP_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}/mcp/citizen/mcp
+      OFFICER_MCP_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}/mcp/officer/mcp
+
+      # ── Scheme configuration ─────────────────────────────────────────────── #
+      MIN_AGE:          "60"
+      SLA_DAYS:         "15"
+      SCHEME_DEADLINE:  "2026-10-31 23:59"
+      AGENT_BLOCKS:     ${AGENT_BLOCKS:-Sonari,Rajapara,Dhemaji Pathar}
+
+      # ── FastMCP binding ──────────────────────────────────────────────────── #
+      FASTMCP_HOST: "0.0.0.0"
+      FASTMCP_PORT: "8001"
+
+      # ── Dev bypass (NEVER set on the public deployment) ──────────────────── #
+      DEV_INSECURE_MOBILE: ${DEV_INSECURE_MOBILE:-}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_started
+    volumes:
+      - mcp_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/mcp', timeout=3)\" 2>/dev/null || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ── Officer MCP (port 8002) ─────────────────────────────────────────────── #
+  officer_mcp:
+    build: ./mcp
+    restart: unless-stopped
+    command: ["python", "officer_mcp.py"]
+    ports:
+      - "8002:8002"
+    environment:
+      # ── Database ────────────────────────────────────────────────────────── #
+      DB_HOST:     db
+      DB_PORT:     "5432"
+      DB_NAME:     sewasetu
+      DB_USER:     sewasetu
+      DB_PASSWORD: sewasetu123
+
+      # ── JWT / OAuth audience ─────────────────────────────────────────────── #
+      PORTAL_ISSUER:    ${PUBLIC_BASE_URL:-http://localhost:8000}
+      PORTAL_JWKS_URL:  http://app:8000/.well-known/jwks.json
+      CITIZEN_MCP_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}/mcp/citizen/mcp
+      OFFICER_MCP_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}/mcp/officer/mcp
+
+      # ── Scheme configuration ─────────────────────────────────────────────── #
+      MIN_AGE:      "60"
+      SLA_DAYS:     "15"
+      AGENT_BLOCKS: ${AGENT_BLOCKS:-Sonari,Rajapara,Dhemaji Pathar}
+
+      # ── FastMCP binding ──────────────────────────────────────────────────── #
+      FASTMCP_HOST: "0.0.0.0"
+      FASTMCP_PORT: "8002"
+
+      # ── Dev bypass (NEVER set on the public deployment) ──────────────────── #
+      DEV_INSECURE_OFFICER: ${DEV_INSECURE_OFFICER:-}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_started
+    volumes:
+      - mcp_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/mcp', timeout=3)\" 2>/dev/null || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ── Caddy: reverse proxy + TLS ─────────────────────────────────────────── #
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+      - citizen_mcp
+      - officer_mcp
 
 volumes:
   pgdata:
   uploads:
   applogs:
+  mcp_data:
+  caddy_data:
+  caddy_config:

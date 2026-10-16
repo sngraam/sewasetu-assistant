@@ -1,83 +1,161 @@
 # Sewa Setu — Old Age Pension Portal
 
-Department of Social Welfare, Government of Purvanchal. Maintained in-house.
+Department of Social Welfare, Government of Purvanchal.
 
-## Running
+---
+
+## Quick start
+
+```bash
+ADMIN_PASSWORD=admin123 docker compose up --build
+```
+
+| Service | URL | Notes |
+|---|---|---|
+| Portal | http://localhost:8000 | Also via Caddy at http://localhost |
+| Status portal | http://localhost:8000/status | Password = DOB as DDMMYYYY |
+| Admin | http://localhost:8000/admin | user `admin`, password from `ADMIN_PASSWORD` |
+| SMS inbox | http://localhost:8000/__gateway/ | OTPs appear here after 1–4 s delivery delay |
+| OTP JSON API | http://localhost:8000/__gateway/api/messages?to=<mobile> | Read OTP for a specific mobile |
+| Eval dashboard | http://localhost:8000/eval-dashboard | Personas, pass criteria, results |
+| **Citizen MCP** | **http://localhost/mcp/citizen/mcp** | Via Caddy (strips prefix) |
+| **Officer MCP** | **http://localhost/mcp/officer/mcp** | Via Caddy (strips prefix) |
+| Citizen MCP (direct) | http://localhost:8001/mcp | Direct port — no Caddy |
+| Officer MCP (direct) | http://localhost:8002/mcp | Direct port — no Caddy |
+
+---
+
+## MCP servers
+
+Sewa Setu exposes two MCP endpoints for AI assistants (Claude Code, Claude Desktop, Kiro, etc.).
+
+### Citizen MCP — `http://localhost/mcp/citizen/mcp`
+
+Helps elderly citizens apply for and manage the Old Age Pension.
+
+| Tool | When to call |
+|---|---|
+| `who_am_i()` | Start of every conversation — confirms sign-in, checks active application |
+| `get_scheme_info()` | Citizen asks about scheme eligibility or documents |
+| `check_eligibility(dob, block)` | Before collecting full details — fails fast if ineligible |
+| `submit_application(...)` | After collecting all fields and explicit confirmation |
+| `my_applications()` | Citizen wants to check application status |
+| `get_application(application_no)` | Full details of one application |
+| `withdraw_application(application_no)` | Withdraw a PENDING application |
+
+### Officer MCP — `http://localhost/mcp/officer/mcp`
+
+Helps block officers review the pending queue and approve or reject applications.
+
+| Tool | When to call |
+|---|---|
+| `queue_summary()` | Start of officer session — overview of pending, overdue counts |
+| `list_pending(page, block)` | See the PENDING queue, oldest first |
+| `get_dossier(application_no)` | Full record + flags before deciding |
+| `decide_application(application_no, decision, reason, confirmed_original_seen)` | Approve or reject |
+
+### Auth
+
+**Production:** Citizen and officer sign in via the portal's OAuth 2.1 flow.
+The AI assistant receives a short-lived RS256 JWT and sends it as `Authorization: Bearer <token>`.
 
 ```
-ADMIN_PASSWORD=pick-something docker compose up --build
+OAuth discovery:  http://localhost:8000/.well-known/oauth-authorization-server
+JWKS:             http://localhost:8000/.well-known/jwks.json
+Authorize:        http://localhost:8000/oauth/authorize
+Token:            http://localhost:8000/oauth/token
 ```
 
-- Portal: http://localhost:8000
-- Status portal: http://localhost:8000/status (mobile number + password; the
-  password is the applicant's date of birth as DDMMYYYY)
-- Departmental login: http://localhost:8000/admin (user `admin`, password from
-  `ADMIN_PASSWORD`)
-- SMS gateway console (simulated telecom): http://localhost:8000/__gateway/ —
-  OTPs and notifications appear here once "delivered" (1–4 s carrier latency).
-  The gateway's inbox is also readable as JSON at
-  `/__gateway/api/messages?to=<mobile>`.
-- Database: Postgres, loaded from `seed/seed.sql` on first boot (~100k applications).
+**Local dev bypass (no OAuth needed):**
+```bash
+DEV_INSECURE_MOBILE=9876543210   # citizen MCP acts as this mobile
+DEV_INSECURE_OFFICER=admin       # officer MCP acts as this officer
+ADMIN_PASSWORD=admin123 docker compose up --build
+```
+
+---
+
+## Project structure
+
+```
+app/              Flask portal + OAuth 2.1 server
+  app.py          Main routes, application flow, admin panel
+  oauth.py        Authorization server (RFC 8414, 7591, PKCE, RFC 8707)
+  eval_personas.py Invented test personas for the eval dashboard
+  templates/      HTML templates (Jinja2)
+  scripts/        Nightly deemed-approval cron job
+  schema.sql      PostgreSQL schema
+
+mcp/              MCP servers (two separate processes)
+  config.py       All env vars — single source of truth
+  auth.py         JWT verification via portal JWKS (RS256)
+  shared.py       Backward-compat re-export shim
+  db/             Database layer (connection pool + queries)
+    pool.py       ThreadedConnectionPool
+    citizen.py    Citizen SQL queries
+    officer.py    Officer SQL queries
+  domain/         Business logic (no DB imports)
+    validation.py validate_application() — mirrors portal rules exactly
+    application.py create, withdraw, build_dossier
+    audit.py      write_audit()
+    time.py       IST clock
+  middleware/     Cross-cutting concerns
+    masking.py    mask_account(), mask_mobile()
+    otp.py        OTP send + verify with rate limiting
+  prompts/        System instructions + next_step constants
+    citizen_instructions.py  <300 token compressed system prompt
+    officer_instructions.py  <200 token compressed system prompt
+    next_steps.py            Structured next_step objects (not prose)
+  tools/          One file per MCP tool
+    citizen/      who_am_i, scheme_info, eligibility, apply, status, withdraw
+    officer/      queue, dossier, decide
+  citizen_mcp.py  Entry point — wires tools, starts server on :8001
+  officer_mcp.py  Entry point — wires tools, starts server on :8002
+
+seed/             seed.sql — 100k-row production data snapshot
+smsgw/            Simulated SMS gateway (OTP delivery)
+tests/            e2e test suite (26 checks)
+```
+
+---
 
 ## Deploying on a server
 
-Set `PUBLIC_BASE_URL` to the address people will use (for example
-`https://sewasetu.example.in`). It is stamped into sign-in tokens and the discovery documents
-described below, so a wrong value means other applications cannot find the sign-in page. Put
-the portal behind HTTPS; some applications refuse to sign in over plain HTTP.
-
-```
-PUBLIC_BASE_URL=https://sewasetu.example.in ADMIN_PASSWORD=pick-something docker compose up --build -d
+```bash
+PUBLIC_BASE_URL=https://sewasetu.example.in \
+ADMIN_PASSWORD=strong-password-here \
+PUBLIC_DOMAIN=sewasetu.example.in \
+docker compose up --build -d
 ```
 
-## What the portal does
+- Set `PUBLIC_DOMAIN` so Caddy provisions a TLS certificate automatically.
+- Set `PUBLIC_BASE_URL` so OAuth tokens have the correct `iss` and MCP audience.
+- Remove `DEV_INSECURE_MOBILE` and `DEV_INSECURE_OFFICER` — these must never be set in production.
+- The MCP endpoints will be at `https://sewasetu.example.in/mcp/citizen/mcp` and `/mcp/officer/mcp`.
 
-Citizen flow: mobile → OTP → personal details → address → bank details →
-age-proof upload → preview and declaration → application number. A nightly
-job (`scripts/deemed_approval.py`, via cron in the `scheduler` container)
-deems approved any application still pending after the 15-day statutory SLA.
+---
 
-Rules enforced at submission, in `validate_application()` in `app/app.py`:
-applicant is 60 years of age or above; required fields and an age-proof
-document are present; the scheme window is open; and the mobile number holds
-no other active (pending / approved / deemed-approved) application. A pending
-application can be withdrawn from the status portal, after which the same
-mobile may apply again.
+## How the portal works
 
-Departmental users see a dashboard, list and filter applications, approve or
-reject pending ones, and see the audit trail per application.
+**Citizen flow:** mobile → OTP → personal details → address → bank details →
+age-proof upload → preview and declaration → application number.
 
-## Layout
+**Rules enforced at submission** (in `validate_application()` — identical in portal and MCP):
+- Applicant is 60 years of age or above
+- Required fields and age-proof document are present
+- Scheme window is open (closes 31 October 2026)
+- Mobile holds no other active (PENDING / APPROVED / DEEMED_APPROVED) application
 
-```
-app/          Flask application, templates, config, nightly job
-seed/         seed.sql — production data snapshot
-smsgw/        simulated SMS gateway
-```
+**Deemed approval:** A nightly cron job (`scripts/deemed_approval.py`) automatically
+approves any application still PENDING after the 15-day SLA, per the Purvanchal
+Right to Public Services Act.
 
-## Letting other applications act for a citizen or an officer
+---
 
-Sewa Setu is also an **OAuth 2.1 authorization server**. A third-party application can act
-for a citizen (scope `citizen`) or for a block officer (scope `officer`) once that person
-signs in on the portal and approves it. Citizens sign in by mobile and OTP, officers with the
-departmental login. The application never handles the OTP or the password.
+## Agent pilot blocks
 
-- Discovery: `/.well-known/oauth-authorization-server` (RFC 8414)
-- Registration: `/oauth/register` (RFC 7591), or a client ID metadata document URL as `client_id`
-- Authorization: `/oauth/authorize` (authorization code with PKCE S256; the `resource` the
-  application asks for becomes the token's audience, RFC 8707)
-- Tokens: `/oauth/token`. Access tokens are RS256 JWTs. A sign-in is a **session with an
-  absolute end**: 2 hours for a citizen, 8 hours for an officer, counted from the consent.
-  Access tokens are short (20 / 30 minutes) and refresh tokens rotate within the session but
-  never extend it; after it ends the person signs in again. Portals are used on shared phones
-  and kiosks.
-- Sign-out: `/oauth/revoke` (RFC 7009). People can also end any sign-in from the status
-  portal (**Connected applications**) or, for officers, the admin dashboard.
-- Keys: `/.well-known/jwks.json`
+The AI channel covers three pilot blocks: **Sonari, Rajapara, Dhemaji Pathar**.
+Citizens in the other three blocks (Borgaon, Namti, Khelua) must apply at the
+block office counter or directly on the portal.
 
-A service that receives one of these tokens verifies it with the JWKS, checks `iss` is this
-portal, checks `aud` is its own canonical URL, and reads `scope`, `role` and `sub`
-(`citizen:<mobile>` or `officer:<username>`).
-
-Long-lived **program tokens** for unattended use (role officer) are issued by an
-administrator at `/admin/tokens`.
+Configure with `AGENT_BLOCKS=Sonari,Rajapara,Dhemaji Pathar` env var.
