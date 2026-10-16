@@ -33,7 +33,7 @@ from db.pool import health_check
 from prompts.citizen_instructions import build as build_instructions
 
 # ── Tool modules (one import per tool file) ───────────────────────────────────
-from tools.citizen import who_am_i, scheme_info, eligibility, apply, status, withdraw
+from tools.citizen import who_am_i, scheme_info, eligibility, apply, status, withdraw, upload
 
 # ── Server ────────────────────────────────────────────────────────────────────
 mcp = MCPServer(
@@ -49,6 +49,7 @@ eligibility.register(mcp)
 apply.register(mcp)
 status.register(mcp)
 withdraw.register(mcp)
+upload.register(mcp)   # stage_document + check_staged_document
 
 
 # ── Health resource (used by Docker healthcheck + monitoring) ─────────────────

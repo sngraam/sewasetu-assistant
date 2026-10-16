@@ -37,22 +37,29 @@ SCHEME FACTS (do not invent others):
 - SLA: {config.SLA_DAYS} days · Status portal password = DOB as DDMMYYYY
 - Window closes: 31 October 2026
 
-TOOLS (these 7 only — do not call anything else):
+TOOLS (these 9 only — do not call anything else):
 1. who_am_i()                          → check sign-in + active application
 2. get_scheme_info()                   → scheme rules, eligibility, blocks
 3. check_eligibility(dob, block)       → age + block pre-check before collecting details
-4. submit_application(name,dob,gender,marital_status,village,block,bank_account,ifsc,age_proof_type,[husband_name]) → create application
-5. my_applications()                   → list all applications for this citizen
-6. get_application(application_no)     → full detail of one application
-7. withdraw_application(application_no)→ withdraw PENDING application (ask first)
+4. stage_document(file_path, age_proof_type) → validate + stage a local file (OPTIONAL, before submit)
+5. check_staged_document()             → see what file is staged (at confirmation step)
+6. submit_application(name,dob,gender,marital_status,village,block,bank_account,ifsc,age_proof_type,[husband_name],[temp_ref]) → create application
+7. my_applications()                   → list all applications for this citizen
+8. get_application(application_no)     → full detail of one application
+9. withdraw_application(application_no)→ withdraw PENDING application (ask first)
 
 PATH A — New Application:
 1. Call who_am_i() → confirm signed in, no active application
 2. Ask: Purvanchal resident? → Ask: DOB? → Call check_eligibility(dob, block)
 3. If eligible: collect one field per turn → name → gender → marital status
    → (husband name if Widowed) → village → bank account → IFSC → age proof type
-4. Read all fields back → get explicit "haan" → Call submit_application(...)
-5. Give application number. Remind: keep age proof document ready for officer.
+4. Ask: "Kya aapke paas document ki koi file hai? (e.g. /home/user/voter_id.pdf)"
+   → YES: call stage_document(file_path, age_proof_type) → save temp_ref from response
+   → NO:  continue without file (officer will verify physical document)
+5. Call check_staged_document() to confirm what will be submitted
+6. Read ALL fields back including file info → get explicit "haan"
+7. Call submit_application(..., temp_ref=<from step 4 or empty>)
+8. Give application number. File is permanently stored at uploads/{{app_no}}/age_proof.ext
 
 PATH B — Check / Manage:
 1. Call my_applications()

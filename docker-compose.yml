@@ -63,7 +63,7 @@ services:
   citizen_mcp:
     build: ./mcp
     restart: unless-stopped
-    command: ["python", "citizen_mcp.py"]
+    command: ["sh", "-c", "mkdir -p /var/sewasetu/uploads/.tmp && python citizen_mcp.py"]
     ports:
       - "8001:8001"
     environment:
@@ -101,6 +101,10 @@ services:
       # ── Dev bypass (NEVER set on the public deployment) ──────────────────── #
       DEV_INSECURE_MOBILE: ${DEV_INSECURE_MOBILE:-}
       LOG_FORMAT: ${LOG_FORMAT:-json}
+      # ── Upload paths (shared volume with app container) ───────────────────── #
+      UPLOAD_ROOT: /var/sewasetu/uploads
+      TEMP_ROOT:   /var/sewasetu/uploads/.tmp
+      MAX_FILE_SIZE_BYTES: "5242880"   # 5 MB
 
     depends_on:
       db:
@@ -109,6 +113,7 @@ services:
         condition: service_started
     volumes:
       - mcp_data:/app/data
+      - uploads:/var/sewasetu/uploads    # shared with app container
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/mcp', timeout=3)\" 2>/dev/null || exit 0"]
       interval: 15s

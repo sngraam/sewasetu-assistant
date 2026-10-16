@@ -82,3 +82,12 @@ OFFICER_MCP_PORT : int = int(os.environ.get("FASTMCP_PORT", "8002"))
 
 # ── Service version (shown in /health) ───────────────────────────────────────
 SERVICE_VERSION : str = os.environ.get("SERVICE_VERSION", "1.0.0")
+
+# ── File upload ───────────────────────────────────────────────────────────────
+# Shared volume with the Flask portal: /var/sewasetu/uploads
+UPLOAD_ROOT  : str = os.environ.get("UPLOAD_ROOT",  "/var/sewasetu/uploads")
+TEMP_ROOT    : str = os.environ.get("TEMP_ROOT",    "/var/sewasetu/uploads/.tmp")
+
+# Accepted extensions and MIME types for age proof documents
+ALLOWED_EXTENSIONS : tuple[str, ...] = (".pdf", ".jpg", ".jpeg", ".png")
+MAX_FILE_SIZE_BYTES : int = int(os.environ.get("MAX_FILE_SIZE_BYTES", str(5 * 1024 * 1024)))  # 5 MB

@@ -1,6 +1,7 @@
 """tools/citizen/withdraw.py — Withdraw a PENDING application."""
 from auth import citizen_mobile, SIGN_IN_REQUIRED
 from domain.application import withdraw_application
+from middleware.uploads import cleanup_temp
 from prompts import next_steps as NS
 
 
@@ -36,6 +37,8 @@ def register(mcp):
         result = withdraw_application(mobile, application_no.strip())
 
         if result.get("success"):
+            # Clean up any staged document for this mobile on withdrawal
+            cleanup_temp(mobile)
             return {
                 **result,
                 "next_step": NS.withdrawn_ok(application_no),
