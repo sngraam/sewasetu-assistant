@@ -23,7 +23,7 @@ _APP_COLS = (
 )
 
 
-# ── Read queries ──────────────────────────────────────────────────────────────
+# Read queries 
 
 def list_applications(
     status: str = "PENDING",
@@ -31,7 +31,9 @@ def list_applications(
     page: int = 1,
     page_size: int = 10,
 ) -> dict:
-    """Paginated list of applications, oldest first. Safe for 100 k rows."""
+    """
+    Paginated list of applications, oldest first. Safe for 100 k rows.
+    """
     page      = max(1, int(page))
     page_size = max(1, min(int(page_size), 20))
 
@@ -76,7 +78,9 @@ def list_applications(
 
 
 def get_application_by_no(app_no: str) -> dict | None:
-    """Full application row for the officer dossier."""
+    """
+    Full application row for the officer dossier.
+    """
     return execute_query(
         f"SELECT {_APP_COLS} FROM applications WHERE application_no = %s",
         (app_no,),
@@ -94,7 +98,9 @@ def get_audit_trail(app_id: int, limit: int = 20) -> list[dict]:
 
 def find_possible_duplicates(app_id: int, bank_account: str,
                               applicant_name: str, dob) -> list[dict]:
-    """Other live applications sharing the bank account OR name+DOB."""
+    """
+    Other live applications sharing the bank account OR name+DOB.
+    """
     return execute_query(
         "SELECT application_no, applicant_name, mobile, status, "
         "(bank_account = %s) AS same_bank_account, "
@@ -108,7 +114,9 @@ def find_possible_duplicates(app_id: int, bank_account: str,
 
 
 def dashboard_stats() -> dict:
-    """Counts by status, pending by block, overdue count."""
+    """
+    Counts by status, pending by block, overdue count.
+    """
     from domain.time import now_ist
     conn = get_conn()
     try:
@@ -147,7 +155,7 @@ def dashboard_stats() -> dict:
         release_conn(conn)
 
 
-# ── Write operations ──────────────────────────────────────────────────────────
+# Write operations 
 
 def decide_application(
     application_no: str,

@@ -73,12 +73,16 @@ def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
 
 
 def get_conn() -> psycopg2.extensions.connection:
-    """Borrow a connection from the pool. Call release_conn() when done."""
+    """
+    Borrow a connection from the pool. Call release_conn() when done.
+    """
     return _get_pool().getconn()
 
 
 def release_conn(conn: psycopg2.extensions.connection) -> None:
-    """Return a connection to the pool."""
+    """
+    Return a connection to the pool.
+    """
     try:
         _get_pool().putconn(conn)
     except Exception as exc:
@@ -87,7 +91,9 @@ def release_conn(conn: psycopg2.extensions.connection) -> None:
 
 @contextmanager
 def db_conn():
-    """Context manager: borrows a connection, commits on success, rolls back on error."""
+    """
+    Context manager: borrows a connection, commits on success, rolls back on error.
+    """
     conn = get_conn()
     try:
         yield conn
@@ -115,7 +121,7 @@ def health_check() -> bool:
         return False
 
 
-# ── Row serialisation ─────────────────────────────────────────────────────────
+# Row serialisation
 
 def row_to_dict(row: Any) -> dict:
     """Convert a RealDictCursor row to a plain JSON-serialisable dict."""
@@ -126,7 +132,7 @@ def row_to_dict(row: Any) -> dict:
     return out
 
 
-# ── Convenience wrapper ───────────────────────────────────────────────────────
+# Convenience wrapper 
 
 def execute_query(
     sql: str,
@@ -135,7 +141,9 @@ def execute_query(
     fetch: str = "all",   # "all" | "one" | "none"
     dict_cursor: bool = True,
 ) -> Any:
-    """Run a SELECT and return rows. Not for writes — use db_conn() for those."""
+    """
+    Run a SELECT and return rows. Not for writes — use db_conn() for those.
+    """
     conn = get_conn()
     try:
         factory = psycopg2.extras.RealDictCursor if dict_cursor else None

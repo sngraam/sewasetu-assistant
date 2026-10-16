@@ -4,6 +4,7 @@ mcp/db/citizen.py — All citizen-facing database queries.
 No business logic here. Every function takes typed arguments, returns plain
 dicts, and leaves transactions to the caller. Import from domain/ for logic.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -23,28 +24,32 @@ _APP_COLS = (
 )
 
 
-# ── Read queries ──────────────────────────────────────────────────────────────
+# Read queries
 
 def get_apps_by_mobile(mobile: str) -> list[dict]:
-    """All applications for a mobile, newest first."""
+    """
+    All applications for a mobile, newest first.
+    """
     return execute_query(
         f"SELECT {_APP_COLS} FROM applications WHERE mobile = %s "
         "ORDER BY submitted_at DESC",
         (mobile,),
     )
 
-
 def get_app_by_no(app_no: str) -> dict | None:
-    """Single application by application number."""
+    """
+    Single application by application number.
+    """
     return execute_query(
         f"SELECT {_APP_COLS} FROM applications WHERE application_no = %s",
         (app_no,),
         fetch="one",
     )
 
-
 def has_active_application(mobile: str) -> dict | None:
-    """Return the live (PENDING/APPROVED/DEEMED_APPROVED) application, or None."""
+    """
+    Return the live (PENDING/APPROVED/DEEMED_APPROVED) application, or None.
+    """
     return execute_query(
         "SELECT id, application_no, status FROM applications "
         "WHERE mobile = %s AND status IN %s "
@@ -53,9 +58,10 @@ def has_active_application(mobile: str) -> dict | None:
         fetch="one",
     )
 
-
 def get_decision_note(app_id: int) -> str:
-    """The officer's reason for the most recent APPROVED/REJECTED decision."""
+    """
+    The officer's reason for the most recent APPROVED/REJECTED decision.
+    """
     row = execute_query(
         "SELECT note FROM audit_log WHERE application_id = %s "
         "AND action IN ('APPROVED','REJECTED') ORDER BY at DESC LIMIT 1",
@@ -67,7 +73,9 @@ def get_decision_note(app_id: int) -> str:
 
 
 def get_otp_count_in_window(mobile: str, window_seconds: int) -> int:
-    """Count OTPs sent to this mobile in the last `window_seconds` seconds."""
+    """
+    Count OTPs sent to this mobile in the last `window_seconds` seconds.
+    """
     from db.pool import get_conn, release_conn
     from domain.time import now_ist
     from datetime import timedelta
@@ -85,10 +93,12 @@ def get_otp_count_in_window(mobile: str, window_seconds: int) -> int:
         release_conn(conn)
 
 
-# ── Write operations ──────────────────────────────────────────────────────────
+# Write operations 
 
 def insert_otp(mobile: str, code: str, created_at) -> None:
-    """Persist a new OTP row."""
+    """
+    Persist a new OTP row.
+    """
     with db_conn() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -99,7 +109,9 @@ def insert_otp(mobile: str, code: str, created_at) -> None:
 
 
 def get_latest_otp(mobile: str) -> tuple | None:
-    """Return (code, created_at) for the most recent OTP, or None."""
+    """
+    Return (code, created_at) for the most recent OTP, or None.
+    """
     conn = get_conn()
     try:
         cur = conn.cursor()
@@ -114,7 +126,9 @@ def get_latest_otp(mobile: str) -> tuple | None:
 
 
 def insert_application(mobile: str, app_no: str, cleaned: dict, submitted_at) -> int:
-    """Insert a validated application row. Returns the new application id."""
+    """
+    Insert a validated application row. Returns the new application id.
+    """
     with db_conn() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -155,7 +169,9 @@ def insert_application(mobile: str, app_no: str, cleaned: dict, submitted_at) ->
 
 
 def withdraw_application_row(mobile: str, application_no: str, decided_at) -> dict:
-    """Set status=WITHDRAWN on a PENDING row. Returns outcome dict."""
+    """
+    Set status=WITHDRAWN on a PENDING row. Returns outcome dict.
+    """
     conn = get_conn()
     try:
         cur = conn.cursor()
