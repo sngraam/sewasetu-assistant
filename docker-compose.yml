@@ -17,7 +17,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── SMS gateway (simulated telecom) ────────────────────────────────────── #
+  # ── SMS gateway ─────────────────────────────────────────────────────────── #
   smsgw:
     build: ./smsgw
     restart: unless-stopped
@@ -31,10 +31,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      SECRET_KEY:       ${SECRET_KEY:-ssp-dev-key-change-me}
-      ADMIN_USERNAME:   ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD:   ${ADMIN_PASSWORD:-change-me-before-deploying}
-      PUBLIC_BASE_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}
+      SECRET_KEY:      ${SECRET_KEY:-ssp-dev-key-change-me}
+      ADMIN_USERNAME:  ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD:  ${ADMIN_PASSWORD:-change-me}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
     depends_on:
       db:
         condition: service_healthy
@@ -50,16 +50,15 @@ services:
     restart: unless-stopped
     command: ["sh", "-c", "until python /app/scripts/deemed_approval.py; do sleep 5; done; exec cron -f"]
     environment:
-      # Scheduler only needs the DB; no SECRET_KEY or PUBLIC_BASE_URL required.
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-before-deploying}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - applogs:/var/log/sewasetu
 
-  # ── Citizen MCP (port 8001) ─────────────────────────────────────────────── #
+  # ── Citizen MCP — port 8001 ─────────────────────────────────────────────── #
   citizen_mcp:
     build: ./mcp
     restart: unless-stopped
@@ -67,45 +66,35 @@ services:
     ports:
       - "8001:8001"
     environment:
-      # ── Database (same instance as the portal) ──────────────────────────── #
+      # Database
       DB_HOST:     db
       DB_PORT:     "5432"
       DB_NAME:     sewasetu
       DB_USER:     sewasetu
       DB_PASSWORD: sewasetu123
-
-      # ── SMS gateway (for OTP fallback / dev testing) ─────────────────────── #
+      # SMS
       SMS_GATEWAY_URL:      http://smsgw:8025
       OTP_VALIDITY_SECONDS: "300"
-
-      # ── JWT / OAuth audience (MUST match the external URL the client uses) ─ #
-      # PORTAL_ISSUER     = canonical public URL of the portal   (= PUBLIC_BASE_URL)
-      # PORTAL_JWKS_URL   = internal URL to fetch JWKS from      (app container name)
-      # CITIZEN_MCP_URL   = canonical public URL of THIS server  (used as JWT audience)
-      # OFFICER_MCP_URL   = canonical public URL of officer MCP  (used for officer tokens)
-      PORTAL_ISSUER:    ${PUBLIC_BASE_URL:-http://localhost:8000}
-      PORTAL_JWKS_URL:  http://app:8000/.well-known/jwks.json
-      CITIZEN_MCP_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}/mcp/citizen/mcp
-      OFFICER_MCP_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}/mcp/officer/mcp
-
-      # ── Scheme configuration ─────────────────────────────────────────────── #
-      MIN_AGE:          "60"
-      SLA_DAYS:         "15"
-      SCHEME_DEADLINE:  "2026-10-31 23:59"
-      AGENT_BLOCKS:     ${AGENT_BLOCKS:-Sonari,Rajapara,Dhemaji Pathar}
-
-      # ── FastMCP binding ──────────────────────────────────────────────────── #
+      # OAuth — all values come from .env (single source of truth)
+      PORTAL_ISSUER:   ${PUBLIC_BASE_URL:-http://localhost}
+      PORTAL_JWKS_URL: http://app:8000/.well-known/jwks.json
+      CITIZEN_MCP_URL: ${CITIZEN_MCP_URL:-http://localhost/mcp/citizen}
+      OFFICER_MCP_URL: ${OFFICER_MCP_URL:-http://localhost/mcp/officer}
+      # Scheme
+      MIN_AGE:         "60"
+      SLA_DAYS:        "15"
+      SCHEME_DEADLINE: "2026-10-31 23:59"
+      AGENT_BLOCKS:    ${AGENT_BLOCKS:-Sonari,Rajapara,Dhemaji Pathar}
+      # Server binding
       FASTMCP_HOST: "0.0.0.0"
       FASTMCP_PORT: "8001"
-
-      # ── Dev bypass (NEVER set on the public deployment) ──────────────────── #
+      # Dev bypass
       DEV_INSECURE_MOBILE: ${DEV_INSECURE_MOBILE:-}
-      LOG_FORMAT: ${LOG_FORMAT:-json}
-      # ── Upload paths (shared volume with app container) ───────────────────── #
-      UPLOAD_ROOT: /var/sewasetu/uploads
-      TEMP_ROOT:   /var/sewasetu/uploads/.tmp
-      MAX_FILE_SIZE_BYTES: "5242880"   # 5 MB
-
+      # Logging + uploads
+      LOG_FORMAT:          ${LOG_FORMAT:-json}
+      UPLOAD_ROOT:         /var/sewasetu/uploads
+      TEMP_ROOT:           /var/sewasetu/uploads/.tmp
+      MAX_FILE_SIZE_BYTES: "5242880"
     depends_on:
       db:
         condition: service_healthy
@@ -113,7 +102,7 @@ services:
         condition: service_started
     volumes:
       - mcp_data:/app/data
-      - uploads:/var/sewasetu/uploads    # shared with app container
+      - uploads:/var/sewasetu/uploads
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/mcp', timeout=3)\" 2>/dev/null || exit 0"]
       interval: 15s
@@ -121,7 +110,7 @@ services:
       retries: 3
       start_period: 20s
 
-  # ── Officer MCP (port 8002) ─────────────────────────────────────────────── #
+  # ── Officer MCP — port 8002 ─────────────────────────────────────────────── #
   officer_mcp:
     build: ./mcp
     restart: unless-stopped
@@ -129,32 +118,28 @@ services:
     ports:
       - "8002:8002"
     environment:
-      # ── Database ────────────────────────────────────────────────────────── #
+      # Database
       DB_HOST:     db
       DB_PORT:     "5432"
       DB_NAME:     sewasetu
       DB_USER:     sewasetu
       DB_PASSWORD: sewasetu123
-
-      # ── JWT / OAuth audience ─────────────────────────────────────────────── #
-      PORTAL_ISSUER:    ${PUBLIC_BASE_URL:-http://localhost:8000}
-      PORTAL_JWKS_URL:  http://app:8000/.well-known/jwks.json
-      CITIZEN_MCP_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}/mcp/citizen/mcp
-      OFFICER_MCP_URL:  ${PUBLIC_BASE_URL:-http://localhost:8000}/mcp/officer/mcp
-
-      # ── Scheme configuration ─────────────────────────────────────────────── #
+      # OAuth — all values come from .env
+      PORTAL_ISSUER:   ${PUBLIC_BASE_URL:-http://localhost}
+      PORTAL_JWKS_URL: http://app:8000/.well-known/jwks.json
+      CITIZEN_MCP_URL: ${CITIZEN_MCP_URL:-http://localhost/mcp/citizen}
+      OFFICER_MCP_URL: ${OFFICER_MCP_URL:-http://localhost/mcp/officer}
+      # Scheme
       MIN_AGE:      "60"
       SLA_DAYS:     "15"
       AGENT_BLOCKS: ${AGENT_BLOCKS:-Sonari,Rajapara,Dhemaji Pathar}
-
-      # ── FastMCP binding ──────────────────────────────────────────────────── #
+      # Server binding
       FASTMCP_HOST: "0.0.0.0"
       FASTMCP_PORT: "8002"
-
-      # ── Dev bypass (NEVER set on the public deployment) ──────────────────── #
+      # Dev bypass
       DEV_INSECURE_OFFICER: ${DEV_INSECURE_OFFICER:-}
+      # Logging
       LOG_FORMAT: ${LOG_FORMAT:-json}
-
     depends_on:
       db:
         condition: service_healthy
@@ -169,7 +154,7 @@ services:
       retries: 3
       start_period: 20s
 
-  # ── Caddy: reverse proxy + TLS ─────────────────────────────────────────── #
+  # ── Caddy: TLS termination + reverse proxy ──────────────────────────────── #
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

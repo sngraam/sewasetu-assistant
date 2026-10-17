@@ -1,29 +1,71 @@
-# Caddyfile — Sewa Setu Unified Gateway
+# ══════════════════════════════════════════════════════════════════════════════
+# Sewa Setu — Caddy Gateway
+# ══════════════════════════════════════════════════════════════════════════════
 #
-# LOCAL DEV (http://localhost): served on port 80 over plain HTTP.
-# PRODUCTION: change http://{$PUBLIC_DOMAIN} to just {$PUBLIC_DOMAIN} so
-#   Caddy auto-provisions a TLS certificate via ACME/Let's Encrypt.
+# CLEAN PUBLIC ENDPOINTS
+#   https://sewasetu.sercho.in/mcp/citizen   ← citizen MCP (Claude/ChatGPT connect here)
+#   https://sewasetu.sercho.in/mcp/officer   ← officer MCP (Claude/ChatGPT connect here)
+#   https://sewasetu.sercho.in/*             ← portal, OAuth, eval-dashboard
 #
-# Routes:
-#   /mcp/citizen/*  →  citizen_mcp:8001  (handle_path strips the prefix)
-#   /mcp/officer/*  →  officer_mcp:8002
-#   everything else →  app:8000 (Flask portal + OAuth + eval dashboard)
+# HOW THE PATH WORKS
+#   The MCP server runs with streamable_http_path="/" so it accepts connections
+#   at the root.  Caddy rewrites /mcp/citizen → / before proxying, so the
+#   container never sees the /mcp/citizen prefix.
+#
+#   Request from Claude:   POST /mcp/citizen
+#   Caddy rewrites to:     POST /
+#   Container receives:    POST /          (citizen_mcp:8001)
+#
+# OAUTH REDIRECT CHAIN (how Claude gets a login page)
+#   1. Claude hits  POST https://sewasetu.sercho.in/mcp/citizen
+#   2. Gets 401 + WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource"
+#   3. Claude fetches  GET https://sewasetu.sercho.in/mcp/citizen/.well-known/oauth-protected-resource
+#      → { "authorization_servers": ["https://sewasetu.sercho.in"] }
+#   4. Claude fetches  GET https://sewasetu.sercho.in/.well-known/oauth-authorization-server
+#      → { "authorization_endpoint": "https://sewasetu.sercho.in/oauth/authorize", ... }
+#   5. Claude opens browser to https://sewasetu.sercho.in/oauth/authorize?...
+#   6. User: mobile + OTP (citizen) or username + password (officer)
+#   7. Browser redirected back to Claude with auth code
+#   8. Claude exchanges code → JWT at https://sewasetu.sercho.in/oauth/token
+#   9. All future calls: Authorization: Bearer <JWT>
+# ══════════════════════════════════════════════════════════════════════════════
 
-http://{$PUBLIC_DOMAIN:localhost} {
+# ── Production: HTTPS + auto-TLS via Let's Encrypt ───────────────────────── #
+{$PUBLIC_DOMAIN:localhost_disabled} {
 
-    # Citizen MCP — tools for applicants only
-    # External: /mcp/citizen/mcp  →  citizen_mcp:8001/mcp
-    handle_path /mcp/citizen* {
+    # ── Citizen MCP ────────────────────────────────────────────────────────── #
+    # Matches /mcp/citizen and /mcp/citizen/* (including /.well-known/* sub-paths)
+    # Rewrites to / so the container sees the request at its root.
+    handle /mcp/citizen* {
+        uri strip_prefix /mcp/citizen
         reverse_proxy citizen_mcp:8001
     }
 
-    # Officer MCP — tools for block officers only
-    # External: /mcp/officer/mcp  →  officer_mcp:8002/mcp
-    handle_path /mcp/officer* {
+    # ── Officer MCP ────────────────────────────────────────────────────────── #
+    handle /mcp/officer* {
+        uri strip_prefix /mcp/officer
         reverse_proxy officer_mcp:8002
     }
 
-    # Flask portal + OAuth 2.1 server + eval dashboard
+    # ── Flask portal + OAuth 2.1 + eval-dashboard ──────────────────────────── #
+    handle {
+        reverse_proxy app:8000
+    }
+}
+
+# ── Local dev: plain HTTP ─────────────────────────────────────────────────── #
+http://localhost {
+
+    handle /mcp/citizen* {
+        uri strip_prefix /mcp/citizen
+        reverse_proxy citizen_mcp:8001
+    }
+
+    handle /mcp/officer* {
+        uri strip_prefix /mcp/officer
+        reverse_proxy officer_mcp:8002
+    }
+
     handle {
         reverse_proxy app:8000
     }

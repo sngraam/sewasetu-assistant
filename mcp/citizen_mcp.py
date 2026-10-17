@@ -82,4 +82,5 @@ if __name__ == "__main__":
         transport="streamable-http",
         host=config.CITIZEN_MCP_HOST,
         port=config.CITIZEN_MCP_PORT,
+        streamable_http_path="/",   # Caddy proxies /mcp/citizen → / on this container
     )

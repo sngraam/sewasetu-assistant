@@ -77,4 +77,5 @@ if __name__ == "__main__":
         transport="streamable-http",
         host=config.OFFICER_MCP_HOST,
         port=config.OFFICER_MCP_PORT,
+        streamable_http_path="/",   # Caddy proxies /mcp/officer → / on this container
     )

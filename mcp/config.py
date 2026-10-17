@@ -39,8 +39,8 @@ ADMIN_PASSWORD : str = os.environ.get("ADMIN_PASSWORD", "")
 # ── JWT / OAuth audience ──────────────────────────────────────────────────────
 PORTAL_ISSUER   : str = os.environ.get("PORTAL_ISSUER",   "").rstrip("/")
 PORTAL_JWKS_URL : str = os.environ.get("PORTAL_JWKS_URL", "") or (PORTAL_ISSUER + "/.well-known/jwks.json")
-CITIZEN_MCP_URL : str = os.environ.get("CITIZEN_MCP_URL", "http://localhost:8001/mcp").rstrip("/")
-OFFICER_MCP_URL : str = os.environ.get("OFFICER_MCP_URL", "http://localhost:8002/mcp").rstrip("/")
+CITIZEN_MCP_URL : str = os.environ.get("CITIZEN_MCP_URL", "http://localhost/mcp/citizen").rstrip("/")
+OFFICER_MCP_URL : str = os.environ.get("OFFICER_MCP_URL", "http://localhost/mcp/officer").rstrip("/")
 
 DEV_INSECURE_MOBILE  : str = os.environ.get("DEV_INSECURE_MOBILE",  "").strip()
 DEV_INSECURE_OFFICER : str = os.environ.get("DEV_INSECURE_OFFICER", "").strip()

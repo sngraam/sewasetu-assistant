@@ -38,8 +38,8 @@ log = logging.getLogger("sewasetu.auth")
 ISSUER = os.environ.get("PORTAL_ISSUER", "").rstrip("/")
 JWKS_URL = os.environ.get("PORTAL_JWKS_URL") or (ISSUER + "/.well-known/jwks.json")
 RESOURCE_URLS = {
-    "citizen": os.environ.get("CITIZEN_MCP_URL", "http://localhost:8001/mcp").rstrip("/"),
-    "officer": os.environ.get("OFFICER_MCP_URL", "http://localhost:8002/mcp").rstrip("/"),
+    "citizen": os.environ.get("CITIZEN_MCP_URL", "http://localhost/mcp/citizen").rstrip("/"),
+    "officer": os.environ.get("OFFICER_MCP_URL", "http://localhost/mcp/officer").rstrip("/"),
 }
 DEV_MOBILE = os.environ.get("DEV_INSECURE_MOBILE", "").strip()
 DEV_OFFICER = os.environ.get("DEV_INSECURE_OFFICER", "").strip()
