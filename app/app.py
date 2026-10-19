@@ -34,10 +34,27 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 config = configparser.ConfigParser()
 config.read(os.path.join(BASE_DIR, "config", "app.ini"))
 
+_secret_key = os.environ.get("SECRET_KEY") or config.get("app", "secret_key")
+_PLACEHOLDER = "REPLACE_WITH_64_CHAR_RANDOM_HEX"
+if _secret_key == _PLACEHOLDER:
+    raise RuntimeError(
+        "SECRET_KEY is still the placeholder value. "
+        "Run:  python3 -c \"import secrets; print(secrets.token_hex(32))\"  "
+        "and set the result as SECRET_KEY in your .env file."
+    )
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY") or config.get("app", "secret_key")
+app.secret_key = _secret_key
 # Two hours: elderly applicants fill the form slowly; the draft lives in the session.
 app.config["PERMANENT_SESSION_LIFETIME"] = 7200
+
+# Production: Caddy sits behind Cloudflare which terminates TLS.
+# Flask needs to trust the X-Forwarded-Proto header from Caddy so that
+# url_for(..., _external=True) produces https:// URLs, and session cookies
+# are marked Secure.  ProxyFix(x_proto=1) trusts exactly one proxy hop.
+if os.environ.get("BEHIND_PROXY", "1") == "1":
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)  # type: ignore[assignment]
 
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
@@ -70,11 +87,11 @@ except Exception:
 
 def get_db():
     return psycopg2.connect(
-        host=config.get("database", "host"),
-        port=config.get("database", "port"),
-        dbname=config.get("database", "name"),
-        user=config.get("database", "user"),
-        password=config.get("database", "password"),
+        host=os.environ.get("DB_HOST") or config.get("database", "host"),
+        port=os.environ.get("DB_PORT") or config.get("database", "port"),
+        dbname=os.environ.get("DB_NAME") or config.get("database", "name"),
+        user=os.environ.get("DB_USER") or config.get("database", "user"),
+        password=os.environ.get("DB_PASSWORD") or config.get("database", "password"),
     )
 
 

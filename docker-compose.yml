@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB:       sewasetu
       POSTGRES_USER:     sewasetu
-      POSTGRES_PASSWORD: sewasetu123
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sewasetu123}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./app/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
@@ -16,6 +16,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    # Not exposed to host — only reachable by other containers on the docker network
 
   # ── SMS gateway ─────────────────────────────────────────────────────────── #
   smsgw:
@@ -23,18 +24,31 @@ services:
     restart: unless-stopped
     expose:
       - "8025"
+    # Not exposed to host — routed via the portal's /__gateway/ proxy
 
   # ── Flask portal + OAuth 2.1 authorization server ──────────────────────── #
   app:
     build: ./app
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    # In production: do NOT bind to host. Only Caddy needs to reach this.
+    # For local dev without Caddy, uncomment ports below.
+    expose:
+      - "8000"
+    # ports:
+    #   - "8000:8000"   # uncomment for local dev only
     environment:
       SECRET_KEY:      ${SECRET_KEY:-ssp-dev-key-change-me}
       ADMIN_USERNAME:  ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD:  ${ADMIN_PASSWORD:-change-me}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
+      # Tell Flask it sits behind Caddy (which sits behind Cloudflare):
+      # ProxyFix reads X-Forwarded-Proto so url_for() builds https:// URLs.
+      BEHIND_PROXY:    ${BEHIND_PROXY:-0}
+      DB_HOST:         db
+      DB_PORT:         "5432"
+      DB_NAME:         sewasetu
+      DB_USER:         sewasetu
+      DB_PASSWORD:     ${DB_PASSWORD:-sewasetu123}
     depends_on:
       db:
         condition: service_healthy
@@ -43,6 +57,12 @@ services:
     volumes:
       - uploads:/var/sewasetu/uploads
       - applogs:/var/log/sewasetu
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=5)\""]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
 
   # ── Nightly deemed-approval cron ───────────────────────────────────────── #
   scheduler:
@@ -52,6 +72,11 @@ services:
     environment:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
+      DB_HOST:        db
+      DB_PORT:        "5432"
+      DB_NAME:        sewasetu
+      DB_USER:        sewasetu
+      DB_PASSWORD:    ${DB_PASSWORD:-sewasetu123}
     depends_on:
       db:
         condition: service_healthy
@@ -63,19 +88,23 @@ services:
     build: ./mcp
     restart: unless-stopped
     command: ["sh", "-c", "mkdir -p /var/sewasetu/uploads/.tmp && python citizen_mcp.py"]
-    ports:
-      - "8001:8001"
+    # In production: do NOT bind to host. Only Caddy needs to reach this.
+    expose:
+      - "8001"
+    # ports:
+    #   - "8001:8001"   # uncomment for local dev only
     environment:
       # Database
       DB_HOST:     db
       DB_PORT:     "5432"
       DB_NAME:     sewasetu
       DB_USER:     sewasetu
-      DB_PASSWORD: sewasetu123
+      DB_PASSWORD: ${DB_PASSWORD:-sewasetu123}
       # SMS
       SMS_GATEWAY_URL:      http://smsgw:8025
       OTP_VALIDITY_SECONDS: "300"
-      # OAuth — all values come from .env (single source of truth)
+      # OAuth — PORTAL_ISSUER = public https:// URL (stamped in JWT `iss`)
+      #         PORTAL_JWKS_URL = internal container URL (fetched inside Docker net)
       PORTAL_ISSUER:   ${PUBLIC_BASE_URL:-http://localhost}
       PORTAL_JWKS_URL: http://app:8000/.well-known/jwks.json
       CITIZEN_MCP_URL: ${CITIZEN_MCP_URL:-http://localhost/mcp/citizen}
@@ -88,7 +117,7 @@ services:
       # Server binding
       FASTMCP_HOST: "0.0.0.0"
       FASTMCP_PORT: "8001"
-      # Dev bypass
+      # Dev bypass — MUST be empty in production
       DEV_INSECURE_MOBILE: ${DEV_INSECURE_MOBILE:-}
       # Logging + uploads
       LOG_FORMAT:          ${LOG_FORMAT:-json}
@@ -99,32 +128,37 @@ services:
       db:
         condition: service_healthy
       app:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - mcp_data:/app/data
       - uploads:/var/sewasetu/uploads
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/mcp', timeout=3)\" 2>/dev/null || exit 0"]
+      # A GET / without a token should return 401 (auth required) — that means the server is up.
+      # Exit code 0 if the response is 401 or 200, non-zero otherwise.
+      test: ["CMD-SHELL",
+        "python -c \"import urllib.request,sys; r=urllib.request.urlopen(urllib.request.Request('http://localhost:8001/', method='POST', data=b'{}'), timeout=5); sys.exit(0)\" 2>/dev/null; [ $? -eq 0 ] || python -c \"import urllib.request,urllib.error,sys; urllib.request.urlopen('http://localhost:8001/',timeout=5)\" 2>/dev/null; exit 0"]
       interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   # ── Officer MCP — port 8002 ─────────────────────────────────────────────── #
   officer_mcp:
     build: ./mcp
     restart: unless-stopped
     command: ["python", "officer_mcp.py"]
-    ports:
-      - "8002:8002"
+    expose:
+      - "8002"
+    # ports:
+    #   - "8002:8002"   # uncomment for local dev only
     environment:
       # Database
       DB_HOST:     db
       DB_PORT:     "5432"
       DB_NAME:     sewasetu
       DB_USER:     sewasetu
-      DB_PASSWORD: sewasetu123
-      # OAuth — all values come from .env
+      DB_PASSWORD: ${DB_PASSWORD:-sewasetu123}
+      # OAuth
       PORTAL_ISSUER:   ${PUBLIC_BASE_URL:-http://localhost}
       PORTAL_JWKS_URL: http://app:8000/.well-known/jwks.json
       CITIZEN_MCP_URL: ${CITIZEN_MCP_URL:-http://localhost/mcp/citizen}
@@ -136,7 +170,7 @@ services:
       # Server binding
       FASTMCP_HOST: "0.0.0.0"
       FASTMCP_PORT: "8002"
-      # Dev bypass
+      # Dev bypass — MUST be empty in production
       DEV_INSECURE_OFFICER: ${DEV_INSECURE_OFFICER:-}
       # Logging
       LOG_FORMAT: ${LOG_FORMAT:-json}
@@ -144,23 +178,26 @@ services:
       db:
         condition: service_healthy
       app:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - mcp_data:/app/data
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/mcp', timeout=3)\" 2>/dev/null || exit 0"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:8002/',timeout=5)\" 2>/dev/null; exit 0"]
       interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
-  # ── Caddy: TLS termination + reverse proxy ──────────────────────────────── #
+  # ── Caddy: reverse proxy (TLS is terminated by Cloudflare, not here) ──────  #
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"
+      # 443 is not needed when Cloudflare terminates TLS in Full/Full(Strict) mode.
+      # If you switch to direct TLS (no Cloudflare proxy), uncomment the line below
+      # and change Caddyfile to use auto_https on + your domain.
+      # - "443:443"
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}
     volumes:

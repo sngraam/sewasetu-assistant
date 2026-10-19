@@ -1,72 +1,99 @@
 # ══════════════════════════════════════════════════════════════════════════════
-# Sewa Setu — Caddy Gateway
-# ══════════════════════════════════════════════════════════════════════════════
+# Sewa Setu — Production Caddy Gateway
 #
-# CLEAN PUBLIC ENDPOINTS
-#   https://sewasetu.sercho.in/mcp/citizen   ← citizen MCP (Claude/ChatGPT connect here)
-#   https://sewasetu.sercho.in/mcp/officer   ← officer MCP (Claude/ChatGPT connect here)
-#   https://sewasetu.sercho.in/*             ← portal, OAuth, eval-dashboard
+# Deployment: Cloudflare (proxy) → AWS EC2 (this Caddy) → containers
 #
-# HOW THE PATH WORKS
-#   The MCP server runs with streamable_http_path="/" so it accepts connections
-#   at the root.  Caddy rewrites /mcp/citizen → / before proxying, so the
-#   container never sees the /mcp/citizen prefix.
+# Cloudflare SSL mode MUST be "Full" or "Full (Strict)" — NOT "Flexible".
+# With Flexible, Cloudflare sends plain HTTP to this server, but all JWT `iss`
+# values say https://... and the JWKS/discovery URLs say https://... which
+# confuses AI clients that cross-check the issuer URL.
 #
-#   Request from Claude:   POST /mcp/citizen
-#   Caddy rewrites to:     POST /
-#   Container receives:    POST /          (citizen_mcp:8001)
+# Because Cloudflare terminates TLS, Caddy only listens on :80.
+# We disable Caddy's own auto-HTTPS (it can't issue certs behind Cloudflare).
 #
-# OAUTH REDIRECT CHAIN (how Claude gets a login page)
-#   1. Claude hits  POST https://sewasetu.sercho.in/mcp/citizen
-#   2. Gets 401 + WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource"
-#   3. Claude fetches  GET https://sewasetu.sercho.in/mcp/citizen/.well-known/oauth-protected-resource
-#      → { "authorization_servers": ["https://sewasetu.sercho.in"] }
-#   4. Claude fetches  GET https://sewasetu.sercho.in/.well-known/oauth-authorization-server
-#      → { "authorization_endpoint": "https://sewasetu.sercho.in/oauth/authorize", ... }
-#   5. Claude opens browser to https://sewasetu.sercho.in/oauth/authorize?...
-#   6. User: mobile + OTP (citizen) or username + password (officer)
-#   7. Browser redirected back to Claude with auth code
-#   8. Claude exchanges code → JWT at https://sewasetu.sercho.in/oauth/token
-#   9. All future calls: Authorization: Bearer <JWT>
+# RFC 9728 §3.1 — how the MCP framework builds the metadata URL:
+#   resource_server_url = https://sewasetu.sercho.in/mcp/citizen
+#   metadata URL        = https://host/.well-known/oauth-protected-resource<path>
+#                       = https://sewasetu.sercho.in/.well-known/oauth-protected-resource/mcp/citizen
+#
+# The MCP SDK registers that FULL PATH inside the container.
+# So we must forward /.well-known/oauth-protected-resource/mcp/citizen
+# to the container WITHOUT stripping any prefix.
+#
+# For regular MCP traffic (/mcp/citizen → container root /),
+# we still strip /mcp/citizen as before.
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ── Production: HTTPS + auto-TLS via Let's Encrypt ───────────────────────── #
-{$PUBLIC_DOMAIN:localhost_disabled} {
-
-    # ── Citizen MCP ────────────────────────────────────────────────────────── #
-    # Matches /mcp/citizen and /mcp/citizen/* (including /.well-known/* sub-paths)
-    # Rewrites to / so the container sees the request at its root.
-    handle /mcp/citizen* {
-        uri strip_prefix /mcp/citizen
-        reverse_proxy citizen_mcp:8001
-    }
-
-    # ── Officer MCP ────────────────────────────────────────────────────────── #
-    handle /mcp/officer* {
-        uri strip_prefix /mcp/officer
-        reverse_proxy officer_mcp:8002
-    }
-
-    # ── Flask portal + OAuth 2.1 + eval-dashboard ──────────────────────────── #
-    handle {
-        reverse_proxy app:8000
-    }
+{
+    auto_https off
 }
 
-# ── Local dev: plain HTTP ─────────────────────────────────────────────────── #
-http://localhost {
+:80 {
 
-    handle /mcp/citizen* {
-        uri strip_prefix /mcp/citizen
-        reverse_proxy citizen_mcp:8001
+    # ── Security headers (applied to every response) ──────────────────────── #
+    header {
+        # Tell browsers this must be HTTPS (Cloudflare enforces this too, but belt-and-braces)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # Basic clickjacking protection for the portal login/consent pages
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Don't expose Caddy version
+        -Server
     }
 
-    handle /mcp/officer* {
-        uri strip_prefix /mcp/officer
-        reverse_proxy officer_mcp:8002
+    # ── Real-IP forwarding for Flask / rate limiting ──────────────────────── #
+    # Cloudflare puts the real client IP in CF-Connecting-IP.
+    # Flask reads REMOTE_ADDR; tell Caddy to overwrite it with the real IP.
+    # (Caddy trusts Cloudflare's IP ranges automatically via X-Forwarded-For.)
+
+    # ── RFC 9728 Protected Resource Metadata ─────────────────────────────── #
+    # These paths MUST be forwarded with the FULL path intact (no stripping).
+    # The MCP container registered the route at the full path.
+    #
+    #   GET /.well-known/oauth-protected-resource/mcp/citizen
+    #       → citizen_mcp:8001  (container serves metadata JSON at this full path)
+    #
+    #   GET /.well-known/oauth-protected-resource/mcp/officer
+    #       → officer_mcp:8002
+    #
+    handle /.well-known/oauth-protected-resource/mcp/citizen* {
+        reverse_proxy citizen_mcp:8001 {
+            flush_interval -1
+        }
     }
 
+    handle /.well-known/oauth-protected-resource/mcp/officer* {
+        reverse_proxy officer_mcp:8002 {
+            flush_interval -1
+        }
+    }
+
+    # ── Citizen MCP wire protocol ─────────────────────────────────────────── #
+    # /mcp/citizen → strip prefix → container sees /  (streamable_http_path="/")
+    handle_path /mcp/citizen* {
+        reverse_proxy citizen_mcp:8001 {
+            flush_interval -1
+            # Pass the real protocol so the MCP container can log correct URLs
+            header_up X-Forwarded-Proto "https"
+        }
+    }
+
+    # ── Officer MCP wire protocol ─────────────────────────────────────────── #
+    handle_path /mcp/officer* {
+        reverse_proxy officer_mcp:8002 {
+            flush_interval -1
+            header_up X-Forwarded-Proto "https"
+        }
+    }
+
+    # ── Flask portal + OAuth 2.1 authorization server + eval dashboard ──────  #
     handle {
-        reverse_proxy app:8000
+        reverse_proxy app:8000 {
+            # Flask needs to know the real scheme to build correct redirect URIs
+            # and to stamp the correct `iss` in tokens.
+            header_up X-Forwarded-Proto "https"
+            header_up X-Forwarded-Host {host}
+        }
     }
 }

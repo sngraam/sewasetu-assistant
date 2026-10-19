@@ -120,7 +120,7 @@ def server_kwargs(role: str) -> dict:
         "auth": AuthSettings(
             issuer_url=ISSUER,
             resource_server_url=RESOURCE_URLS[role],
-            required_scopes=None,           # role check is done in the verifier
+            required_scopes=[role],         # advertised in RFC 9728 metadata
             validate_token_resource=False,  # the verifier already checks `aud`
         ),
         "token_verifier": PortalTokenVerifier(role),

@@ -58,6 +58,13 @@ SCOPES = {
                "record approve/reject decisions",
 }
 
+# offline_access is a standard scope (RFC 6749 / OAuth 2.0) that signals the client
+# wants a refresh token so it can act on the user's behalf between sessions.
+# Claude and ChatGPT append this scope automatically when it is advertised in the
+# AS metadata; without it they never request a refresh token and the user must
+# re-authenticate every 20 minutes (= citizen access token TTL).
+OFFLINE_ACCESS_SCOPE = "offline_access"
+
 
 # ---------------------------------------------------------------------------
 # keys
@@ -138,6 +145,11 @@ def verify_token(token, audience):
 
 @oauth.get("/.well-known/oauth-authorization-server")
 def as_metadata():
+    # scopes_supported must include "offline_access" so that Claude/ChatGPT
+    # automatically append it to authorization requests and receive a refresh
+    # token. Without it, the AI client never asks for a refresh token and the
+    # user is kicked out after the access token expires (~20 min for citizens).
+    scopes = list(SCOPES) + [OFFLINE_ACCESS_SCOPE]
     return jsonify({
         "issuer": ISSUER,
         "authorization_endpoint": ISSUER + "/oauth/authorize",
@@ -145,11 +157,14 @@ def as_metadata():
         "registration_endpoint": ISSUER + "/oauth/register",
         "jwks_uri": ISSUER + "/.well-known/jwks.json",
         "revocation_endpoint": ISSUER + "/oauth/revoke",
-        "scopes_supported": list(SCOPES),
+        "scopes_supported": scopes,
         "response_types_supported": ["code"],
         "response_modes_supported": ["query"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
+        # "none" must be listed so Claude selects the CIMD path for public clients
+        # (Claude docs: CIMD is chosen only when both client_id_metadata_document_supported
+        #  is true AND "none" is in token_endpoint_auth_methods_supported)
         "token_endpoint_auth_methods_supported": ["none", "client_secret_post"],
         "authorization_response_iss_parameter_supported": True,
         "client_id_metadata_document_supported": True,
@@ -326,21 +341,32 @@ def authorize():
     if q.get("code_challenge_method", "S256") != "S256" or not q.get("code_challenge"):
         return _err_redirect(redirect_uri, state, "invalid_request", "PKCE with S256 is required")
     scopes = [s for s in (q.get("scope") or "citizen").split() if s]
-    unknown = [s for s in scopes if s not in SCOPES]
-    if unknown or len(scopes) != 1:
+    # Strip offline_access — we always issue refresh tokens and it needs no special handling.
+    # Claude/ChatGPT append it automatically when it's in scopes_supported; we accept and
+    # silently drop it here so the role scope validation below only sees "citizen" or "officer".
+    role_scopes = [s for s in scopes if s != OFFLINE_ACCESS_SCOPE]
+    resource = q.get("resource") or ISSUER
+    if len(role_scopes) > 1 and resource:
+        if "citizen" in resource and "citizen" in role_scopes:
+            role_scopes = ["citizen"]
+        elif "officer" in resource and "officer" in role_scopes:
+            role_scopes = ["officer"]
+        elif "citizen" in role_scopes:
+            role_scopes = ["citizen"]
+    unknown = [s for s in role_scopes if s not in SCOPES]
+    if unknown or len(role_scopes) != 1:
         return _err_redirect(redirect_uri, state, "invalid_scope",
                              "request exactly one of: " + ", ".join(SCOPES))
-    resource = q.get("resource") or ISSUER
     rid = secrets.token_urlsafe(24)
     params = {
         "client_id": client_id, "client_name": client["client_name"], "redirect_uri": redirect_uri,
-        "state": state, "code_challenge": q["code_challenge"], "scope": scopes[0],
+        "state": state, "code_challenge": q["code_challenge"], "scope": role_scopes[0],
         "resource": resource,
     }
     conn = portal.get_db()
     cur = conn.cursor()
     cur.execute("INSERT INTO oauth_requests (id, params, role, created_at) VALUES (%s, %s, %s, %s)",
-                (rid, json.dumps(params), scopes[0], datetime.now()))
+                (rid, json.dumps(params), role_scopes[0], datetime.now()))
     conn.commit()
     cur.close(); conn.close()
     return redirect(url_for("oauth.login", rid=rid))
