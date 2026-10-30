@@ -69,7 +69,7 @@ ELIGIBLE_PROCEED = {
     "action":    "ask_question",
     "field":     "applicant_name",
     "prompt":    "Bahut accha! Aap eligible hain. Ab aapka poora naam batayein — bilkul waise jaisa age proof document mein likha hai.",
-    "remaining": ["applicant_name", "gender", "marital_status", "village", "bank_account", "ifsc", "age_proof_type(Path, URL, or document number if provided by applicant. Omit or leave empty if applicant does not have a file.)"],
+    "remaining": ["applicant_name", "gender", "marital_status", "village", "bank_account", "ifsc", "age_proof_type"],
     "progress":  "0 of 7 fields collected",
     "recovery":  "ask_again",
 }
