@@ -32,8 +32,6 @@
 
     # ── Security headers (applied to every response) ──────────────────────── #
     header {
-        # Tell browsers this must be HTTPS (Cloudflare enforces this too, but belt-and-braces)
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
         # Basic clickjacking protection for the portal login/consent pages
         X-Frame-Options "SAMEORIGIN"
         X-Content-Type-Options "nosniff"
@@ -74,8 +72,7 @@
     handle_path /mcp/citizen* {
         reverse_proxy citizen_mcp:8001 {
             flush_interval -1
-            # Pass the real protocol so the MCP container can log correct URLs
-            header_up X-Forwarded-Proto "https"
+            header_up X-Forwarded-Proto {header.X-Forwarded-Proto}
         }
     }
 
@@ -83,16 +80,14 @@
     handle_path /mcp/officer* {
         reverse_proxy officer_mcp:8002 {
             flush_interval -1
-            header_up X-Forwarded-Proto "https"
+            header_up X-Forwarded-Proto {header.X-Forwarded-Proto}
         }
     }
 
     # ── Flask portal + OAuth 2.1 authorization server + eval dashboard ──────  #
     handle {
         reverse_proxy app:8000 {
-            # Flask needs to know the real scheme to build correct redirect URIs
-            # and to stamp the correct `iss` in tokens.
-            header_up X-Forwarded-Proto "https"
+            header_up X-Forwarded-Proto {header.X-Forwarded-Proto}
             header_up X-Forwarded-Host {host}
         }
     }

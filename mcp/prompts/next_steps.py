@@ -244,7 +244,7 @@ def officer_dossier_warnings(warnings: list[str]) -> dict:
     w_text = "; ".join(warnings)
     return {
         "action": "inform",
-        "prompt": f"⚠️  {len(warnings)} warning(s): {w_text}. Dhyan se review karein.",
+        "prompt": f"WARNING ({len(warnings)} flag(s)): {w_text}. Review carefully before deciding.",
     }
 
 

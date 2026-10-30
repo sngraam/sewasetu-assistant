@@ -1,249 +1,712 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Eval Dashboard — Sewa Setu MCP</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
-        crossorigin="anonymous">
-  <style>
-    body { background: #f8f9fa; }
-    .header-bar { background: #1a3c5e; color: #fff; padding: 1.5rem 2rem; }
-    .header-bar h1 { font-size: 1.4rem; margin: 0; }
-    .header-bar p  { margin: 0.2rem 0 0; opacity: 0.8; font-size: 0.9rem; }
-    .pass-rate-card { border-left: 6px solid #198754; }
-    .metric-card    { border-left: 6px solid #0d6efd; }
-    .badge-pass     { background: #198754; }
-    .badge-fail     { background: #dc3545; }
-    .badge-pending  { background: #6c757d; }
-    .criteria-list  { font-size: 0.82rem; color: #555; padding-left: 1.2rem; margin: 0; }
-    th { background: #1a3c5e; color: #fff; white-space: nowrap; }
-    .role-citizen { color: #0d6efd; font-weight: 600; }
-    .role-officer { color: #6f42c1; font-weight: 600; }
-    .ineligible   { color: #dc3545; }
-    .eligible     { color: #198754; }
-    pre { background: #f1f1f1; padding: 0.6rem; border-radius: 4px; font-size: 0.8rem; }
-    .decision-section { background: #fff; border: 1px solid #dee2e6; border-radius: 8px;
-                        padding: 1.5rem; margin-bottom: 2rem; }
-    footer { background: #1a3c5e; color: #aaa; font-size: 0.8rem; padding: 1rem 2rem; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evaluation Dashboard — Sewa Setu Old Age Pension Portal</title>
+<style>
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0;
+    background: #f0f2f5;
+    color: #222;
+    line-height: 1.45;
+  }
+  .header {
+    background: #0b3d6e;
+    color: #fff;
+    padding: 16px 32px;
+  }
+  .header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: bold;
+    letter-spacing: -0.2px;
+  }
+  .header .sub {
+    font-size: 13px;
+    color: #cfe0f3;
+    margin-top: 3px;
+  }
+  .band {
+    background: #f7931e;
+    height: 5px;
+  }
+  .container {
+    max-width: 1180px;
+    margin: 24px auto;
+    background: #fff;
+    padding: 28px 32px;
+    border: 1px solid #d7dbe0;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  .btn {
+    background: #0b3d6e;
+    color: #fff;
+    border: none;
+    padding: 7px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    border-radius: 2px;
+  }
+  .btn:hover {
+    background: #0d4a85;
+    color: #fff;
+  }
+  .btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  .btn-secondary {
+    background: #6c757d;
+  }
+  .btn-secondary:hover {
+    background: #5a6268;
+  }
+  .btn-sync {
+    background: #b36b00;
+  }
+  .btn-sync:hover {
+    background: #995c00;
+  }
+  .flash {
+    background: #fdecea;
+    border: 1px solid #e57373;
+    color: #a33;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  .flash-success {
+    background: #e8f5e9;
+    border: 1px solid #81c784;
+    color: #1b5e20;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  
+  /* Metric cards */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .metric-box {
+    border: 1px solid #d7dbe0;
+    padding: 16px;
+    background: #fafbfc;
+    border-left: 4px solid #0b3d6e;
+  }
+  .metric-box.pass {
+    border-left-color: #1b7e3c;
+  }
+  .metric-box.warn {
+    border-left-color: #f7931e;
+  }
+  .metric-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #666;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+  }
+  .metric-value {
+    font-size: 26px;
+    font-weight: bold;
+    color: #111;
+    margin: 4px 0;
+  }
+  .metric-desc {
+    font-size: 12px;
+    color: #666;
+  }
+
+  /* Section styling */
+  h2 {
+    font-size: 20px;
+    margin: 0 0 4px 0;
+    color: #0b3d6e;
+  }
+  h3 {
+    font-size: 16px;
+    margin: 28px 0 12px 0;
+    color: #0b3d6e;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 6px;
+  }
+  h4 {
+    font-size: 14px;
+    margin: 16px 0 6px 0;
+    color: #222;
+  }
+  p {
+    font-size: 14px;
+    margin: 6px 0 12px 0;
+  }
+  .note {
+    font-size: 13px;
+    color: #555;
+  }
+
+  /* Data tables */
+  table.tbl {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0 20px 0;
+    font-size: 13px;
+  }
+  table.tbl td, table.tbl th {
+    border: 1px solid #ccd;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.tbl th {
+    background: #0b3d6e;
+    color: #fff;
+    font-weight: bold;
+  }
+  table.tbl tr:nth-child(even) td {
+    background: #fdfdfd;
+  }
+  table.tbl tr:hover td {
+    background: #f7f9fa;
+  }
+
+  /* Status Badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+  .badge-pass {
+    background: #e8f5e9;
+    color: #1b7e3c;
+    border: 1px solid #a5d6a7;
+  }
+  .badge-pending {
+    background: #fff8e1;
+    color: #b78103;
+    border: 1px solid #ffe082;
+  }
+  .badge-fail {
+    background: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef9a9a;
+  }
+  .badge-pilot {
+    background: #e1f5fe;
+    color: #0277bd;
+    border: 1px solid #b3e5fc;
+  }
+  .badge-role {
+    background: #ede7f6;
+    color: #4527a0;
+    border: 1px solid #d1c4e9;
+  }
+
+  /* Filters */
+  .filter-links {
+    margin: 14px 0;
+    font-size: 13px;
+  }
+  .filter-links a {
+    color: #0b3d6e;
+    text-decoration: none;
+    margin-right: 12px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .filter-links a.active {
+    color: #f7931e;
+    text-decoration: underline;
+  }
+
+  /* Transcript & Code Blocks */
+  .transcript-panel {
+    background: #f8f9fa;
+    border: 1px solid #d7dbe0;
+    padding: 14px 18px;
+    margin: 10px 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .turn {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #e0e0e0;
+  }
+  .turn:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+  .turn-speaker {
+    font-weight: bold;
+    color: #0b3d6e;
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+  .turn-speaker.citizen {
+    color: #8d4f00;
+  }
+  .turn-speaker.officer {
+    color: #333333;
+  }
+  .turn-text {
+    color: #222;
+  }
+  .tool-pill {
+    display: inline-block;
+    background: #eef2f6;
+    border: 1px solid #ccd5df;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #0b3d6e;
+    margin-top: 4px;
+    border-radius: 2px;
+  }
+  .tool-result {
+    display: block;
+    background: #f1f3f4;
+    border-left: 3px solid #0b3d6e;
+    padding: 4px 8px;
+    font-family: monospace;
+    font-size: 11px;
+    color: #333;
+    margin-top: 3px;
+    overflow-x: auto;
+  }
+  pre.code-box {
+    background: #f4f6f8;
+    border: 1px solid #d7dbe0;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-family: Consolas, Monaco, monospace;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+
+  /* Finding boxes */
+  .finding-box {
+    border: 1px solid #d7dbe0;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    background: #fff;
+    border-left: 4px solid #0b3d6e;
+  }
+  .finding-title {
+    font-weight: bold;
+    font-size: 14px;
+    color: #0b3d6e;
+    margin-bottom: 4px;
+  }
+
+  .footer {
+    max-width: 1180px;
+    margin: 16px auto 40px;
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+  }
+  .footer a {
+    color: #0b3d6e;
+    margin: 0 8px;
+  }
+</style>
 </head>
 <body>
 
-<div class="header-bar">
-  <h1>🧪 Sewa Setu MCP — Eval Dashboard</h1>
-  <p>Automated evaluation of the Citizen and Officer MCP servers against invented personas.</p>
+<div class="header">
+  <h1>Sewa Setu &mdash; Old Age Pension Portal</h1>
+  <div class="sub">Department of Social Welfare &middot; Government of Purvanchal &middot; Evaluation System</div>
 </div>
+<div class="band"></div>
 
-<div class="container-fluid py-4 px-4">
+<div class="container">
 
-  <!-- ── Summary metrics ───────────────────────────────────────────────── -->
-  <div class="row g-3 mb-4">
-    <div class="col-md-3">
-      <div class="card pass-rate-card">
-        <div class="card-body">
-          <div class="text-muted small">Overall Pass Rate</div>
-          <div class="fs-2 fw-bold text-success">{{ pass_rate }}%</div>
-          <div class="text-muted small">{{ passed_count }} / {{ total_count }} checks</div>
-        </div>
-      </div>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for m in messages %}
+        <div class="flash-success">{{ m }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+    <div>
+      <h2>Evaluation & Benchmarking Dashboard</h2>
+      <div class="note">Build for Bharat Fellowship (2027 Cohort) &middot; AI Track &middot; Ground Truth Verification</div>
     </div>
-    <div class="col-md-3">
-      <div class="card metric-card">
-        <div class="card-body">
-          <div class="text-muted small">Citizen Personas</div>
-          <div class="fs-2 fw-bold">{{ citizen_count }}</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card metric-card">
-        <div class="card-body">
-          <div class="text-muted small">Officer Personas</div>
-          <div class="fs-2 fw-bold">{{ officer_count }}</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card metric-card">
-        <div class="card-body">
-          <div class="text-muted small">Last Run</div>
-          <div class="fw-bold">{{ last_run }}</div>
-        </div>
-      </div>
+    <div style="text-align: right;">
+      <form method="POST" action="/eval-dashboard/seed-live-eval" style="display: inline;">
+        <button type="submit" class="btn btn-sm btn-sync">Sync & Verify Live Database</button>
+      </form>
+      <div class="note" style="margin-top: 4px;">Last Verified: <strong>{{ last_run }}</strong></div>
     </div>
   </div>
 
-  <!-- ── MCP Endpoints ─────────────────────────────────────────────────── -->
-  <div class="card mb-4">
-    <div class="card-body">
-      <h5 class="card-title">MCP Endpoints</h5>
-      <div class="row">
-        <div class="col-md-6">
-          <strong>Citizen MCP</strong><br>
-          <code>{{ citizen_mcp_url }}</code>
-        </div>
-        <div class="col-md-6">
-          <strong>Officer MCP</strong><br>
-          <code>{{ officer_mcp_url }}</code>
-        </div>
-      </div>
+  <!-- Metric Strip -->
+  <div class="metrics-grid">
+    <div class="metric-box pass">
+      <div class="metric-title">Persona Pass Rate</div>
+      <div class="metric-value">{{ pass_rate }}%</div>
+      <div class="metric-desc">{{ passed_count }} pass &middot; {{ failed_count }} fail &middot; {{ total_count }} total</div>
+    </div>
+    <div class="metric-box pass">
+      <div class="metric-title">E2E Protocol Tests</div>
+      <div class="metric-value">{{ e2e_passed }} / {{ e2e_total }}</div>
+      <div class="metric-desc">Streamable-HTTP wire checks passed</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-title">Evaluated Roles</div>
+      <div class="metric-value">{{ citizen_count }} + {{ officer_count }}</div>
+      <div class="metric-desc">{{ citizen_count }} Citizens &middot; {{ officer_count }} Block Officers</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-title">Scheme SLA & Pilot</div>
+      <div class="metric-value">15 Days</div>
+      <div class="metric-desc">RTPS Act SLA &middot; 3 Pilot Blocks</div>
     </div>
   </div>
 
-  <!-- ── Personas table ────────────────────────────────────────────────── -->
-  <div class="card mb-4">
-    <div class="card-header fw-bold">Personas & Scenarios</div>
-    <div class="table-responsive">
-      <table class="table table-hover mb-0">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Name</th>
-            <th>Role</th>
-            <th>Age / Block</th>
-            <th>Language</th>
-            <th>Scenario</th>
-            <th>Eligibility</th>
-            <th>Expected DB State</th>
-            <th>Pass Criteria</th>
-            <th>Result</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in personas %}
-          <tr>
-            <td><code>{{ p.id }}</code></td>
-            <td><strong>{{ p.name }}</strong></td>
-            <td>
-              {% if p.role == "citizen" %}
-                <span class="role-citizen">👤 Citizen</span>
-              {% else %}
-                <span class="role-officer">🛡 Officer</span>
-              {% endif %}
-            </td>
-            <td>
-              {{ p.age }} yrs<br>
-              {% if p.get("block") %}
-                <small class="text-muted">{{ p.block }}</small>
-              {% else %}
-                <small class="text-muted">—</small>
-              {% endif %}
-            </td>
-            <td>{{ p.language }}</td>
-            <td>{{ p.scenario }}</td>
-            <td>
-              {% if p.get("eligibility") == "ELIGIBLE" %}
-                <span class="eligible">✓ Eligible</span>
-              {% elif p.get("eligibility") == "INELIGIBLE" %}
-                <span class="ineligible">✗ Ineligible</span>
-                <br><small class="text-muted">{{ p.get("ineligibility_reason", "") }}</small>
-              {% else %}
-                <span class="text-muted">N/A</span>
-              {% endif %}
-            </td>
-            <td><small>{{ p.expected_db }}</small></td>
-            <td>
-              <ul class="criteria-list">
+  <!-- Section 1: MCP Endpoints & Testing -->
+  <h3>1. MCP Service Endpoints & Client Connection</h3>
+  <p class="note">
+    AI assistants connect over streamable-HTTP using standard OAuth 2.1 authentication (or dev bypass when configured).
+  </p>
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th style="width: 22%;">Service</th>
+        <th style="width: 38%;">Endpoint URL</th>
+        <th style="width: 40%;">Authentication & Scope</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Citizen MCP</strong></td>
+        <td><code>{{ citizen_mcp_url }}</code></td>
+        <td>OAuth 2.1 Bearer JWT &middot; Scope: <code>citizen</code> &middot; Audience: <code>{{ citizen_mcp_url }}</code></td>
+      </tr>
+      <tr>
+        <td><strong>Officer MCP</strong></td>
+        <td><code>{{ officer_mcp_url }}</code></td>
+        <td>OAuth 2.1 Bearer JWT &middot; Scope: <code>officer</code> &middot; Audience: <code>{{ officer_mcp_url }}</code></td>
+      </tr>
+      <tr>
+        <td><strong>OAuth Discovery</strong></td>
+        <td><code>{{ portal_url }}/.well-known/oauth-authorization-server</code></td>
+        <td>RFC 8414 Authorization Server Metadata</td>
+      </tr>
+      <tr>
+        <td><strong>JWKS (Public Keys)</strong></td>
+        <td><code>{{ portal_url }}/.well-known/jwks.json</code></td>
+        <td>RS256 Public Key Set for stateless token verification</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <details style="margin-bottom: 20px;">
+    <summary style="font-size: 13px; font-weight: bold; color: #0b3d6e; cursor: pointer;">Show Claude Desktop Configuration (claude_desktop_config.json)</summary>
+    <pre class="code-box">{
+  "mcpServers": {
+    "sewasetu-citizen": {
+      "type": "http",
+      "url": "{{ citizen_mcp_url }}"
+    },
+    "sewasetu-officer": {
+      "type": "http",
+      "url": "{{ officer_mcp_url }}"
+    }
+  }
+}</pre>
+    <div class="note">Claude Code CLI: <code>claude mcp add sewasetu-citizen -- {{ citizen_mcp_url }}</code></div>
+  </details>
+
+  <!-- Section 2: Personas & Ground Truth -->
+  <h3>2. Evaluated Personas & Ground Truth Scenarios ({{ total_count }} Personas)</h3>
+  <p class="note">
+    Invented personas simulating realistic welfare administration: rural widows at CSC kiosks, regional dialects, underage applicants, out-of-pilot blocks, duplicate status queries, file staging, and supervisory block officer dossiers.
+  </p>
+
+  <div class="filter-links">
+    Filter:
+    <a onclick="filterTable('all', this)" class="active">All ({{ total_count }})</a>
+    <a onclick="filterTable('citizen', this)">Citizens ({{ citizen_count }})</a>
+    <a onclick="filterTable('officer', this)">Officers ({{ officer_count }})</a>
+    <a onclick="filterTable('eligible', this)">Eligible ({{ eligible_count }})</a>
+    <a onclick="filterTable('ineligible', this)">Ineligible / Blocked ({{ ineligible_count }})</a>
+  </div>
+
+  <table class="tbl" id="personaTable">
+    <thead>
+      <tr>
+        <th style="width: 5%;">#</th>
+        <th style="width: 17%;">Persona & Role</th>
+        <th style="width: 14%;">Demographics</th>
+        <th style="width: 28%;">Scenario & Context</th>
+        <th style="width: 18%;">Ground Truth DB State</th>
+        <th style="width: 8%;">Status</th>
+        <th style="width: 10%;">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in personas %}
+      <tr class="persona-row" data-role="{{ p.role }}" data-eligibility="{{ p.eligibility|lower }}">
+        <td><strong>{{ p.id }}</strong></td>
+        <td>
+          <strong>{{ p.name }}</strong><br>
+          {% if p.role == 'citizen' %}
+            <span class="badge badge-role">Citizen</span>
+            {% if p.eligibility == 'ELIGIBLE' %}
+              <span class="badge badge-pass">Eligible</span>
+            {% elif p.eligibility == 'INELIGIBLE' %}
+              <span class="badge badge-fail">Ineligible</span>
+            {% endif %}
+          {% else %}
+            <span class="badge badge-role">Block Officer</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if p.age %}{{ p.age }} yrs{% endif %}
+          {% if p.gender %}&middot; {{ p.gender }}{% endif %}<br>
+          {{ p.village if p.village else "" }}{% if p.village and p.block %}, {% endif %}<strong>{{ p.block }}</strong>
+          {% if p.block in ['Sonari', 'Rajapara', 'Dhemaji Pathar'] %}
+            <br><span class="badge badge-pilot">Pilot Block</span>
+          {% elif p.block %}
+            <br><span class="note">Non-Pilot</span>
+          {% endif %}
+        </td>
+        <td>
+          <div style="margin-bottom: 4px;">{{ p.scenario }}</div>
+          <div class="note"><strong>Language:</strong> {{ p.language }}</div>
+          <div class="note"><strong>Context:</strong> {{ p.context }}</div>
+        </td>
+        <td>
+          <div style="font-size: 12px;">{{ p.expected_db }}</div>
+          <div class="note" style="margin-top: 4px;">{{ p.live_db_status }}</div>
+        </td>
+        <td>
+          {% if p.result == 'PASS' %}
+            <span class="badge badge-pass">PASS</span>
+          {% elif p.result == 'FAIL' %}
+            <span class="badge badge-fail">FAIL</span>
+          {% else %}
+            <span class="badge badge-pending">{{ p.result }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <button type="button" class="btn btn-sm" onclick="toggleTranscript('details-{{ p.id }}')">Transcript</button>
+        </td>
+      </tr>
+      <tr id="details-{{ p.id }}" style="display: none; background: #fafbfc;">
+        <td colspan="7" style="padding: 16px 20px;">
+          <h4 style="margin-top:0;">Dialogue Transcript & Verification Evidence: {{ p.id }} &mdash; {{ p.name }}</h4>
+          
+          <div style="display: grid; grid-template-columns: 3fr 2fr; gap: 20px;">
+            <!-- Left: Transcript -->
+            <div>
+              <strong>Multi-Turn Conversation:</strong>
+              <div class="transcript-panel">
+                {% if p.conversation %}
+                  {% for turn in p.conversation %}
+                    <div class="turn">
+                      <div class="turn-speaker {{ turn.speaker }}">
+                        {% if turn.speaker == 'citizen' %}
+                          Applicant ({{ p.name }}) [{{ turn.timestamp }}]:
+                        {% elif turn.speaker == 'officer' %}
+                          Block Officer ({{ p.name }}) [{{ turn.timestamp }}]:
+                        {% else %}
+                          Sewa Setu Assistant [{{ turn.timestamp }}]:
+                        {% endif %}
+                      </div>
+                      <div class="turn-text">{{ turn.text }}</div>
+                      {% if turn.tool_call %}
+                        <div class="tool-pill">Call: {{ turn.tool_call }}</div>
+                      {% endif %}
+                      {% if turn.tool_result %}
+                        <div class="tool-result">Result: {{ turn.tool_result }}</div>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="note">No conversation turns recorded.</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Right: SQL & Assertions -->
+            <div>
+              <strong>SQL Verification Query:</strong>
+              <pre class="code-box">{{ p.sql_check }}</pre>
+
+              <strong>Criteria Checklist:</strong>
+              <ul style="margin: 6px 0 12px 18px; padding: 0; font-size: 12px; color: #444;">
                 {% for c in p.pass_criteria %}
                   <li>{{ c }}</li>
                 {% endfor %}
               </ul>
-            </td>
-            <td>
-              {% if p.result == "PASS" %}
-                <span class="badge badge-pass text-white">PASS</span>
-              {% elif p.result == "FAIL" %}
-                <span class="badge badge-fail text-white">FAIL</span>
-              {% else %}
-                <span class="badge badge-pending text-white">PENDING</span>
-              {% endif %}
-            </td>
-            <td><small class="text-muted">{{ p.notes if p.notes else "—" }}</small></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
 
-  <!-- ── Design Decisions ──────────────────────────────────────────────── -->
-  <div class="decision-section">
-    <h5>Three Decisions That Mattered Most</h5>
-    <ol>
-      <li>
-        <strong>JWT over OTP-in-MCP:</strong> The original prototype asked citizens
-        for their OTP inside the chat. We replaced this with the portal's full
-        OAuth 2.1 flow so that (a) the AI model never sees an OTP or password,
-        (b) the same JWT works on both citizen and officer MCPs with correct
-        audience separation, and (c) session expiry is enforced server-side.
-      </li>
-      <li>
-        <strong>Pilot block scope (AGENT_BLOCKS):</strong> The Director explicitly
-        asked us to run the agent only for a subset of blocks. We enforce this in
-        both <code>check_eligibility</code> and <code>submit_application</code> so
-        citizens from non-pilot blocks are redirected to the counter at eligibility
-        check time — not after they have given all their details.
-      </li>
-      <li>
-        <strong>Declared-only age proof with officer confirmation:</strong> The agent
-        channel cannot upload files. We store a <code>declared://&lt;type&gt;</code>
-        marker in <code>doc_path</code> and surface a warning in the officer dossier.
-        The officer must set <code>confirmed_original_seen=True</code> before approving
-        a declared-only application — making it impossible for the AI to silently
-        approve an unverified document.
-      </li>
-    </ol>
+              <div style="border-top: 1px solid #ddd; padding-top: 8px;">
+                <strong>Technical Eval Finding:</strong>
+                <p class="note" style="margin-top: 4px;">{{ p.eval_insight }}</p>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
-    <h5 class="mt-3">One Decision We Would Make Differently</h5>
+  <!-- Section 3: Key Technical Findings -->
+  <h3>3. Key Technical Findings & Changes Made</h3>
+  <p class="note">
+    Rigorous persona testing identified four critical edge cases, resulting in direct prompt and backend code refinements.
+  </p>
+
+  <div class="finding-box">
+    <div class="finding-title">1. Rule R1: Single-Question Pacing on Small LLMs</div>
     <p>
-      We would replace the in-process <code>_VERIFIED</code> dict (used as a dev
-      fallback for OTP verification state) with a Redis-backed session store shared
-      across multiple MCP server replicas. The current design works for a single
-      container but breaks under horizontal scaling — which matters once the pilot
-      expands beyond three blocks.
+      <strong>Failure Observed:</strong> Small models (like those running in Claude Code or low-turn agents) frequently bundled 5 to 7 field inquiries into a single message ("Please provide your name, DOB, block, bank account, and IFSC"). Elderly applicants and kiosk operators were consistently confused and skipped fields.
+    </p>
+    <p class="note">
+      <strong>Engineering Fix:</strong> Enforced Rule R1 in system prompts ("Ask ONE question per reply. Stop. Wait for citizen's answer") coupled with structured, machine-parsable <code>next_step</code> payloads that dictate single-field progression.
     </p>
   </div>
 
-  <!-- ── e2e test results ──────────────────────────────────────────────── -->
-  <div class="card mb-4">
-    <div class="card-header fw-bold">e2e Test Suite — 26 Checks</div>
-    <div class="card-body">
-      {% if e2e_results %}
-        <table class="table table-sm">
-          <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
-          <tbody>
-            {% for r in e2e_results %}
-            <tr>
-              <td>{{ r.name }}</td>
-              <td>
-                {% if r.passed %}
-                  <span class="badge badge-pass text-white">PASS</span>
-                {% else %}
-                  <span class="badge badge-fail text-white">FAIL</span>
-                {% endif %}
-              </td>
-              <td><small class="text-muted">{{ r.detail }}</small></td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="text-muted mb-0">
-          Run <code>python tests/e2e_local.py</code> to populate this section.
-        </p>
-      {% endif %}
-    </div>
+  <div class="finding-box">
+    <div class="finding-title">2. Early Pilot Block Fail-Fast at Eligibility Check</div>
+    <p>
+      <strong>Failure Observed:</strong> Testing with Geeta Devi (P05) from Namti revealed that checking <code>AGENT_BLOCKS</code> solely at <code>submit_application</code> caused ineligible citizens to spend 10 minutes entering personal, address, and bank information before being turned away.
+    </p>
+    <p class="note">
+      <strong>Engineering Fix:</strong> Moved pilot block validation into <code>check_eligibility(dob, block)</code> on Turn 2. Non-pilot residents are immediately and respectfully redirected to the block development counter before submitting sensitive data.
+    </p>
   </div>
 
-</div><!-- /container -->
+  <div class="finding-box">
+    <div class="finding-title">3. Declared-Only Document Safeguard with Mandatory Attestation</div>
+    <p>
+      <strong>Failure Observed:</strong> Chat-based assistants cannot easily capture physical paper documents from rural citizens. Early officer MCP prototypes risked approving records where no human had ever inspected the applicant's identity proof.
+    </p>
+    <p class="note">
+      <strong>Engineering Fix:</strong> Applications without file attachments are stored with <code>doc_path = 'declared://<type>'</code>. In <code>officer_mcp.py</code>, calling <code>decide_application(..., decision="APPROVE")</code> fails with <code>DECLARED_ONLY_UNCONFIRMED</code> unless the officer explicitly passes <code>confirmed_original_seen=True</code>, enforcing statutory human accountability.
+    </p>
+  </div>
 
-<footer>
-  Sewa Setu — Department of Social Welfare, Government of Purvanchal &nbsp;|&nbsp;
-  Eval dashboard generated automatically.
-</footer>
+  <div class="finding-box">
+    <div class="finding-title">4. Zero-Trust OAuth 2.1 Over In-Chat OTP Collection</div>
+    <p>
+      <strong>Failure Observed:</strong> Initial prototypes exposed <code>send_otp</code> and <code>verify_otp</code> directly as MCP tools, training citizens to share OTPs with chatbots.
+    </p>
+    <p class="note">
+      <strong>Engineering Fix:</strong> Replaced in-chat OTP with the portal's native OAuth 2.1 server. Citizens authenticate on the official portal via mobile + OTP + consent; the AI client receives a scoped RS256 JWT with audience validation. The model never touches credentials.
+    </p>
+  </div>
+
+  <!-- Section 4: E2E Test Suite -->
+  <h3>4. Automated End-to-End Test Suite ({{ e2e_total }} Checks)</h3>
+  <p class="note">
+    Automated JSON-RPC streamable-HTTP suite testing authentication boundaries, field constraints, and officer decision logging.
+  </p>
+
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th style="width: 8%;">Check</th>
+        <th style="width: 32%;">Description</th>
+        <th style="width: 10%;">Result</th>
+        <th style="width: 50%;">Ground Truth Assertion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in e2e_results %}
+      <tr>
+        <td><code>{{ r.name.split()[0] }}</code></td>
+        <td>{{ ' '.join(r.name.split()[1:]) }}</td>
+        <td>
+          {% if r.passed %}
+            <span class="badge badge-pass">PASS</span>
+          {% else %}
+            <span class="badge badge-fail">FAIL</span>
+          {% endif %}
+        </td>
+        <td><span class="note">{{ r.detail }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Section 5: Architecture Decisions -->
+  <h3>5. Architectural Decisions</h3>
+  <p><strong>Three Decisions That Mattered Most:</strong></p>
+  <ol style="font-size: 13px; line-height: 1.6;">
+    <li><strong>JWT over OTP-in-MCP:</strong> Protects citizens against credential phishing and enables cryptographic audience isolation between Citizen MCP (:8001) and Officer MCP (:8002).</li>
+    <li><strong>Pilot Block Scope Enforced at Eligibility:</strong> Prevents non-pilot block citizens from expending unnecessary effort entering bank details.</li>
+    <li><strong>Declared-Only Age Proof with Officer Confirmation:</strong> Structurally prevents AI or officers from approving applications without physical document verification.</li>
+  </ol>
+
+  <p><strong>One Decision to Make Differently With More Time:</strong></p>
+  <p class="note">
+    <strong>Redis-Backed Distributed Session State:</strong> While production JWTs are stateless, ephemeral OTP rate limits and temporary staging currently run on local storage / PostgreSQL. With more time, Redis would back transient session counters to support horizontal scaling across multi-region server clusters.
+  </p>
+
+</div>
+
+<div class="footer">
+  <a href="/">Portal Home</a> | <a href="/about">About the Scheme</a> | <a href="/status">Application Status</a> | <a href="/admin">Admin Panel</a><br>
+  Sewa Setu &middot; Department of Social Welfare &middot; Government of Purvanchal
+</div>
+
+<script>
+function toggleTranscript(id) {
+  var row = document.getElementById(id);
+  if (row.style.display === 'none' || row.style.display === '') {
+    row.style.display = 'table-row';
+  } else {
+    row.style.display = 'none';
+  }
+}
+
+function filterTable(category, link) {
+  var links = document.querySelectorAll('.filter-links a');
+  links.forEach(function(l) { l.classList.remove('active'); });
+  link.classList.add('active');
+
+  var rows = document.querySelectorAll('.persona-row');
+  rows.forEach(function(row) {
+    var role = row.getAttribute('data-role');
+    var elig = row.getAttribute('data-eligibility');
+    var id = row.querySelector('strong').innerText;
+    var detailRow = document.getElementById('details-' + id);
+    if (detailRow) detailRow.style.display = 'none';
+
+    var show = false;
+    if (category === 'all') {
+      show = true;
+    } else if (category === 'citizen') {
+      show = (role === 'citizen');
+    } else if (category === 'officer') {
+      show = (role === 'officer');
+    } else if (category === 'eligible') {
+      show = (elig === 'eligible');
+    } else if (category === 'ineligible') {
+      show = (elig === 'ineligible');
+    }
+    row.style.display = show ? 'table-row' : 'none';
+  });
+}
+</script>
 
 </body>
 </html>

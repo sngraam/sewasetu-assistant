@@ -30,12 +30,10 @@ services:
   app:
     build: ./app
     restart: unless-stopped
-    # In production: do NOT bind to host. Only Caddy needs to reach this.
-    # For local dev without Caddy, uncomment ports below.
     expose:
       - "8000"
-    # ports:
-    #   - "8000:8000"   # uncomment for local dev only
+    ports:
+      - "8000:8000"
     environment:
       SECRET_KEY:      ${SECRET_KEY:-ssp-dev-key-change-me}
       ADMIN_USERNAME:  ${ADMIN_USERNAME:-admin}
@@ -55,6 +53,7 @@ services:
       smsgw:
         condition: service_started
     volumes:
+      - ./app:/app
       - uploads:/var/sewasetu/uploads
       - applogs:/var/log/sewasetu
     healthcheck:
@@ -81,6 +80,7 @@ services:
       db:
         condition: service_healthy
     volumes:
+      - ./app:/app
       - applogs:/var/log/sewasetu
 
   # ── Citizen MCP — port 8001 ─────────────────────────────────────────────── #
@@ -88,11 +88,10 @@ services:
     build: ./mcp
     restart: unless-stopped
     command: ["sh", "-c", "mkdir -p /var/sewasetu/uploads/.tmp && python citizen_mcp.py"]
-    # In production: do NOT bind to host. Only Caddy needs to reach this.
     expose:
       - "8001"
-    # ports:
-    #   - "8001:8001"   # uncomment for local dev only
+    ports:
+      - "8001:8001"
     environment:
       # Database
       DB_HOST:     db
@@ -130,6 +129,7 @@ services:
       app:
         condition: service_healthy
     volumes:
+      - ./mcp:/app
       - mcp_data:/app/data
       - uploads:/var/sewasetu/uploads
     healthcheck:
@@ -149,8 +149,8 @@ services:
     command: ["python", "officer_mcp.py"]
     expose:
       - "8002"
-    # ports:
-    #   - "8002:8002"   # uncomment for local dev only
+    ports:
+      - "8002:8002"
     environment:
       # Database
       DB_HOST:     db
@@ -180,6 +180,7 @@ services:
       app:
         condition: service_healthy
     volumes:
+      - ./mcp:/app
       - mcp_data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:8002/',timeout=5)\" 2>/dev/null; exit 0"]
